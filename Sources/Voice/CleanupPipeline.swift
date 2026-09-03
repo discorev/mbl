@@ -45,10 +45,9 @@ enum CleanupPipeline {
         local: LocalCleaner
     ) async -> CleanupResult {
         guard local.isAvailable else {
-            return rawResult(
-                raw,
-                error: localUnavailableDescription()
-            )
+            let error = "Local language model \(local.availabilityDescription)"
+            await AppLog.write("\(error); typing raw transcript")
+            return rawResult(raw, error: error)
         }
 
         let started = Date()
@@ -104,7 +103,7 @@ enum CleanupPipeline {
             )
         } catch {
             let codexError = error.localizedDescription
-            guard fallback == .local, local.isAvailable else {
+            if fallback == .none {
                 let duration = Date().timeIntervalSince(started)
                 await AppLog.write(
                     "cleanup failed after \(formatSeconds(duration))s: "
@@ -115,6 +114,20 @@ enum CleanupPipeline {
                     raw,
                     duration: duration,
                     error: codexError
+                )
+            }
+            guard local.isAvailable else {
+                let duration = Date().timeIntervalSince(started)
+                let localError = "Local language model \(local.availabilityDescription)"
+                await AppLog.write(
+                    "cleanup fallback unavailable after \(formatSeconds(duration))s: "
+                        + localError
+                        + "; typing raw transcript"
+                )
+                return rawResult(
+                    raw,
+                    duration: duration,
+                    error: "Codex: \(codexError); local: \(localError)"
                 )
             }
 
@@ -167,10 +180,6 @@ enum CleanupPipeline {
             duration: duration,
             error: error
         )
-    }
-
-    private static func localUnavailableDescription() -> String {
-        "Local language model unavailable"
     }
 
     private static func formatSeconds(_ seconds: TimeInterval) -> String {

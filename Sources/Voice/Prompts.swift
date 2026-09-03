@@ -129,7 +129,7 @@ enum Prompts {
     - Spoken punctuation and formatting commands are instructions, not text: "full stop", "comma", "new line", "new paragraph", "open quote" etc.
     - If the input is already clean, return it unchanged.
     - Output only the cleaned text. No preamble, no quotes, no explanation.
-    """
+    """ + "\n"
 
     private static let macOS26Default = """
     Task: rewrite raw dictation as clean written text. The user is dictating into a text field. Reply with the rewritten text only, no introduction.
@@ -160,7 +160,7 @@ enum Prompts {
     Example:
     Dictation: I'm trying to see if the um new engine feels like reasonably fast
     Rewrite: I'm trying to see if the new engine feels reasonably fast.
-    """
+    """ + "\n"
 }
 
 enum PromptError: LocalizedError {

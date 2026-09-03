@@ -12,6 +12,15 @@ struct LocalCleaner: Cleaner {
         SystemLanguageModel.default.isAvailable
     }
 
+    var availabilityDescription: String {
+        switch SystemLanguageModel.default.availability {
+        case .available:
+            "available"
+        case .unavailable(let reason):
+            "unavailable reason=\(reason)"
+        }
+    }
+
     @MainActor
     func logAvailability() {
         switch SystemLanguageModel.default.availability {

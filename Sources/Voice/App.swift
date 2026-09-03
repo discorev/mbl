@@ -382,7 +382,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-
     @objc
     private func openHistory() {
         do {
