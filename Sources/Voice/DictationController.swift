@@ -16,6 +16,7 @@ final class DictationController {
     private var finalTask: Task<Void, Never>?
     private var previewTimer: Timer?
     private var levelTimer: Timer?
+    private var peakRMS: Float = 0
 
     private var modelsReady = false
     private var isHolding = false
@@ -335,6 +336,10 @@ final class DictationController {
         levelTimer?.invalidate()
         levelTimer = nil
         hud.setLevel(0)
+        if peakRMS > 0 {
+            AppLog.write("level: peak rms=\(String(format: "%.4f", peakRMS))")
+            peakRMS = 0
+        }
     }
 
     @objc
@@ -342,7 +347,9 @@ final class DictationController {
         guard isHolding, isRecording else {
             return
         }
-        hud.setLevel(min(1, recorder.recentLevel() * 9))
+        let rms = recorder.recentLevel()
+        peakRMS = max(peakRMS, rms)
+        hud.setLevel(Self.normaliseLevel(rms))
     }
 
     @objc
@@ -397,6 +404,15 @@ final class DictationController {
                 }
             }
         }
+    }
+
+    /// Map mic RMS to 0...1 on a log scale so quiet speech still moves the
+    /// indicator. Tuned on a MacBook Air mic at 75% input: -52 dBFS -> 0,
+    /// -26 dBFS (a firm syllable) -> 1.
+    private static func normaliseLevel(_ rms: Float) -> Float {
+        guard rms > 0 else { return 0 }
+        let db = 20 * log10(rms)
+        return min(1, max(0, (db + 52) / 26))
     }
 
     private func formatSeconds(_ seconds: TimeInterval) -> String {
