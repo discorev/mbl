@@ -139,9 +139,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 AppLog.write(
                     "microphone permission outcome: \(granted ? "granted" : "denied")"
                 )
-                if granted {
-                    self.dictation?.warmRecorder()
-                }
             }
         }
     }
