@@ -4,7 +4,8 @@ import Foundation
 final class DictationController {
     private let recorder: Recorder
     private let transcriber: Transcriber
-    private let cleaner: any Cleaner
+    private let codexCleaner: CodexCleaner
+    private let localCleaner: LocalCleaner
     private let typist: Typist
     private let hud: HUD
     private let onListeningChanged: (Bool) -> Void
@@ -25,7 +26,8 @@ final class DictationController {
     init(
         recorder: Recorder,
         transcriber: Transcriber,
-        cleaner: any Cleaner,
+        codexCleaner: CodexCleaner,
+        localCleaner: LocalCleaner,
         typist: Typist,
         hud: HUD,
         config: Config,
@@ -33,7 +35,8 @@ final class DictationController {
     ) {
         self.recorder = recorder
         self.transcriber = transcriber
-        self.cleaner = cleaner
+        self.codexCleaner = codexCleaner
+        self.localCleaner = localCleaner
         self.typist = typist
         self.hud = hud
         self.config = config
@@ -188,9 +191,10 @@ final class DictationController {
         let started = Date()
         do {
             let text = try await transcriber.transcribe(samples)
+            let transcribeDuration = Date().timeIntervalSince(started)
             AppLog.write(
                 "final transcribe: audio=\(formatSeconds(audioSeconds))s "
-                    + "duration=\(formatSeconds(Date().timeIntervalSince(started)))s"
+                    + "duration=\(formatSeconds(transcribeDuration))s"
             )
 
             guard !Task.isCancelled, utteranceID == sessionID else {
@@ -198,45 +202,45 @@ final class DictationController {
             }
 
             let wordCount = text.split(whereSeparator: \.isWhitespace).count
-            guard
-                config.backend == "codex",
-                wordCount >= config.minWordsForCleanup
-            else {
-                hud.update(state: .done, text: text)
-                handleDelivery(typist.deliver(text), transcriptKind: "raw")
+            if wordCount >= config.minWordsForCleanup {
+                hud.update(state: .cleaning, text: text)
+                AppLog.write("raw: \(text)")
+            }
+
+            let result = await CleanupPipeline.run(
+                raw: text,
+                config: config,
+                codex: codexCleaner,
+                local: localCleaner
+            )
+            guard !Task.isCancelled, utteranceID == sessionID else {
                 return
             }
 
-            hud.update(state: .cleaning, text: text)
-            AppLog.write("raw: \(text)")
-            let cleanupStarted = Date()
-            do {
-                let cleaned = try await cleaner.clean(text)
-                let cleanupDuration = Date().timeIntervalSince(cleanupStarted)
-                AppLog.write(
-                    "cleanup: duration=\(formatSeconds(cleanupDuration))s"
+            switch result.backend {
+            case .codex:
+                hud.update(state: .done, text: result.output)
+            case .local:
+                hud.update(state: .cleanedLocally, text: result.output)
+            case .raw:
+                hud.update(
+                    state: .done,
+                    text: result.output,
+                    showsWarning: result.error != nil
                 )
-                AppLog.write("cleaned: \(cleaned)")
-                guard !Task.isCancelled, utteranceID == sessionID else {
-                    return
-                }
-                hud.update(state: .done, text: cleaned)
-                handleDelivery(
-                    typist.deliver(cleaned),
-                    transcriptKind: "cleaned"
-                )
-            } catch {
-                guard !Task.isCancelled, utteranceID == sessionID else {
-                    return
-                }
-                AppLog.write(
-                    "cleanup failed after "
-                        + formatSeconds(Date().timeIntervalSince(cleanupStarted))
-                        + "s: \(error.localizedDescription); typing raw transcript"
-                )
-                hud.update(state: .done, text: text, showsWarning: true)
-                handleDelivery(typist.deliver(text), transcriptKind: "raw")
             }
+
+            let delivery = typist.deliver(result.output)
+            appendHistory(
+                audioSeconds: audioSeconds,
+                raw: text,
+                result: result,
+                transcribeDuration: transcribeDuration
+            )
+            handleDelivery(
+                delivery,
+                transcriptKind: result.backend == .raw ? "raw" : "cleaned"
+            )
         } catch {
             guard !Task.isCancelled, utteranceID == sessionID else {
                 return
@@ -248,6 +252,26 @@ final class DictationController {
             )
             hud.update(state: .done, text: "Transcription failed")
             hud.dismissAfterPaste()
+        }
+    }
+
+    private func appendHistory(
+        audioSeconds: TimeInterval,
+        raw: String,
+        result: CleanupResult,
+        transcribeDuration: TimeInterval
+    ) {
+        do {
+            try History.append(
+                HistoryEntry(
+                    audioSeconds: audioSeconds,
+                    raw: raw,
+                    result: result,
+                    transcribeDuration: transcribeDuration
+                )
+            )
+        } catch {
+            AppLog.write("history append failed: \(error.localizedDescription)")
         }
     }
 

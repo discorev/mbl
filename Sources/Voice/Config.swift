@@ -1,12 +1,21 @@
 import Foundation
 
+enum CleanupBackend: String, Codable, Sendable {
+    case codex
+    case local
+}
+
+enum CleanupFallback: String, Codable, Sendable {
+    case local
+    case none
+}
+
 struct Config: Codable, Sendable {
     let hotkey: String
-    let backend: String
+    let backend: CleanupBackend
     let codexModel: String
     let codexThreadMaxTurns: Int
-    let claudeModel: String
-    let fallback: Bool
+    let fallback: CleanupFallback
     let minWordsForCleanup: Int
     let cleanupTimeoutSeconds: Int
     let previewTickMs: Int
@@ -14,13 +23,12 @@ struct Config: Codable, Sendable {
 
     static let fallbackValue = Config(
         hotkey: "rightOption",
-        backend: "codex",
+        backend: .codex,
         codexModel: "gpt-5.6-luna",
         codexThreadMaxTurns: 50,
-        claudeModel: "sonnet",
-        fallback: false,
+        fallback: .local,
         minWordsForCleanup: 4,
-        cleanupTimeoutSeconds: 8,
+        cleanupTimeoutSeconds: 6,
         previewTickMs: 500,
         hudBottomInset: 80
     )
@@ -36,6 +44,7 @@ struct Config: Codable, Sendable {
             .appendingPathComponent(".config/voice", isDirectory: true)
     }
 
+    @MainActor
     static func load(fileManager: FileManager = .default) throws -> Config {
         let directory = directoryURL
         try fileManager.createDirectory(
@@ -44,16 +53,60 @@ struct Config: Codable, Sendable {
         )
 
         let configURL = directory.appendingPathComponent("config.json")
-        let promptURL = directory.appendingPathComponent("prompt.md")
         let vocabularyURL = directory.appendingPathComponent("vocab.txt")
 
         try writeIfMissing(defaultConfigJSON, to: configURL, fileManager: fileManager)
-        try writeIfMissing(defaultPrompt, to: promptURL, fileManager: fileManager)
-        try updateOldDefaultPrompt(at: promptURL)
-        try writeIfMissing("", to: vocabularyURL, fileManager: fileManager)
-
         let data = try Data(contentsOf: configURL)
-        return try JSONDecoder().decode(Config.self, from: data)
+        let config = try JSONDecoder().decode(Config.self, from: data)
+        try Prompts.prepare(
+            config: config,
+            directoryURL: directory,
+            fileManager: fileManager
+        )
+        try writeIfMissing("", to: vocabularyURL, fileManager: fileManager)
+        return config
+    }
+
+    init(
+        hotkey: String,
+        backend: CleanupBackend,
+        codexModel: String,
+        codexThreadMaxTurns: Int,
+        fallback: CleanupFallback,
+        minWordsForCleanup: Int,
+        cleanupTimeoutSeconds: Int,
+        previewTickMs: Int,
+        hudBottomInset: Int
+    ) {
+        self.hotkey = hotkey
+        self.backend = backend
+        self.codexModel = codexModel
+        self.codexThreadMaxTurns = codexThreadMaxTurns
+        self.fallback = fallback
+        self.minWordsForCleanup = minWordsForCleanup
+        self.cleanupTimeoutSeconds = cleanupTimeoutSeconds
+        self.previewTickMs = previewTickMs
+        self.hudBottomInset = hudBottomInset
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hotkey = try container.decode(String.self, forKey: .hotkey)
+        backend = try container.decode(CleanupBackend.self, forKey: .backend)
+        codexModel = try container.decode(String.self, forKey: .codexModel)
+        codexThreadMaxTurns = try container.decode(Int.self, forKey: .codexThreadMaxTurns)
+        minWordsForCleanup = try container.decode(Int.self, forKey: .minWordsForCleanup)
+        cleanupTimeoutSeconds = try container.decode(Int.self, forKey: .cleanupTimeoutSeconds)
+        previewTickMs = try container.decode(Int.self, forKey: .previewTickMs)
+        hudBottomInset = try container.decode(Int.self, forKey: .hudBottomInset)
+
+        if let value = try? container.decode(CleanupFallback.self, forKey: .fallback) {
+            fallback = value
+        } else if let legacy = try? container.decode(Bool.self, forKey: .fallback) {
+            fallback = legacy ? .local : .none
+        } else {
+            fallback = .local
+        }
     }
 
     private static func writeIfMissing(
@@ -67,47 +120,18 @@ struct Config: Codable, Sendable {
         try Data(contents.utf8).write(to: url, options: .atomic)
     }
 
-    private static func updateOldDefaultPrompt(at url: URL) throws {
-        let existing = try String(contentsOf: url, encoding: .utf8)
-        guard existing == oldDefaultPrompt else { return }
-        try Data(defaultPrompt.utf8).write(to: url, options: .atomic)
-    }
-
     private static let defaultConfigJSON = """
     {
       "hotkey": "rightOption",
       "backend": "codex",
       "codexModel": "gpt-5.6-luna",
       "codexThreadMaxTurns": 50,
-      "claudeModel": "sonnet",
-      "fallback": false,
+      "fallback": "local",
       "minWordsForCleanup": 4,
-      "cleanupTimeoutSeconds": 8,
+      "cleanupTimeoutSeconds": 6,
       "previewTickMs": 500,
       "hudBottomInset": 80
     }
-
-    """
-
-    private static let oldDefaultPrompt = """
-    You are a dictation cleaner. Clean the user's raw dictated speech for insertion at the cursor.
-
-    Remove filler words, false starts, repeated words, and self-corrections. When the speaker corrects something, keep only the last version. Keep the speaker's wording, meaning, and tone. Fix punctuation and casing. Do not expand, answer, summarize, explain, or add anything. Output only the cleaned text.
-
-    """
-
-    private static let defaultPrompt = """
-    You are a dictation cleaner. The user dictates text to be inserted at their cursor; you receive the raw speech-to-text output and return the cleaned text.
-
-    Rules:
-    - Remove filler words (um, er, like, you know), false starts, stutters and repeated words.
-    - When the speaker corrects themselves ("no wait", "actually", "I mean"), keep only the final version.
-    - Keep the speaker's wording, meaning and tone. Do not summarise, expand, rephrase for style, or add anything.
-    - Fix punctuation, casing and sentence boundaries.
-    - Use British English spelling (recognise, colour, organisation).
-    - Spoken punctuation and formatting commands are instructions, not text: "full stop", "comma", "new line", "new paragraph", "open quote" etc.
-    - If the input is already clean, return it unchanged.
-    - Output only the cleaned text. No preamble, no quotes, no explanation.
 
     """
 }

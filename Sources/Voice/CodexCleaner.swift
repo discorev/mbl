@@ -225,7 +225,10 @@ actor CodexCleaner: Cleaner {
         config: Config,
         configDirectory: URL
     ) async throws -> StartedThread {
-        let promptURL = configDirectory.appendingPathComponent("prompt.md")
+        let promptURL = Prompts.codexURL(
+            for: config.codexModel,
+            directoryURL: configDirectory
+        )
         let prompt = try String(contentsOf: promptURL, encoding: .utf8)
         let modificationDate = try promptURL.resourceValues(
             forKeys: [.contentModificationDateKey]
@@ -284,7 +287,10 @@ actor CodexCleaner: Cleaner {
     private func rotateThreadIfNeeded() async throws {
         guard let rpc else { throw CodexCleanerError.notReady }
 
-        let promptURL = configDirectory.appendingPathComponent("prompt.md")
+        let promptURL = Prompts.codexURL(
+            for: config.codexModel,
+            directoryURL: configDirectory
+        )
         let currentModificationDate = try promptURL.resourceValues(
             forKeys: [.contentModificationDateKey]
         ).contentModificationDate

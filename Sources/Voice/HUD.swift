@@ -6,6 +6,7 @@ enum HUDState: String {
     case transcribing
     case cleaning
     case done
+    case cleanedLocally = "cleaned locally"
 }
 
 @MainActor

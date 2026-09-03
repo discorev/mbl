@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private let transcriber = Transcriber()
+    private let localCleaner = LocalCleaner()
     private var cleaner: CodexCleaner?
     private var statusItem: NSStatusItem?
     private var hotkey: Hotkey?
@@ -55,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let config = loadConfig()
+        localCleaner.logAvailability()
         let cleaner = CodexCleaner(config: config)
         self.cleaner = cleaner
         configureDictation(config: config, cleaner: cleaner)
@@ -62,7 +64,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureHotkey()
         requestMicrophonePermission()
         requestAccessibilityPermission()
-        beginCleanerStartup(cleaner)
+        if config.backend == .codex {
+            beginCleanerStartup(cleaner)
+        }
         beginModelLoading()
     }
 
@@ -91,11 +95,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func configureDictation(config: Config, cleaner: any Cleaner) {
+    private func configureDictation(config: Config, cleaner: CodexCleaner) {
         let controller = DictationController(
             recorder: Recorder(),
             transcriber: transcriber,
-            cleaner: cleaner,
+            codexCleaner: cleaner,
+            localCleaner: localCleaner,
             typist: Typist(),
             hud: HUD(bottomInset: CGFloat(config.hudBottomInset)),
             config: config,
@@ -243,6 +248,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         configItem.target = self
         menu.addItem(configItem)
+
+        let historyItem = NSMenuItem(
+            title: "Open history",
+            action: #selector(openHistory),
+            keyEquivalent: ""
+        )
+        historyItem.target = self
+        menu.addItem(historyItem)
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
@@ -290,26 +303,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func runCleanerTest(raw: String) {
         let config = loadConfig()
+        localCleaner.logAvailability()
         let cleaner = CodexCleaner(config: config)
         self.cleaner = cleaner
         cleanerTestTask = Task { @MainActor in
             AppLog.write("cleaner-test input: \(raw)")
+            if config.backend == .codex {
+                do {
+                    try await cleaner.start()
+                } catch {
+                    AppLog.write(
+                        "cleaner-test startup failed: \(error.localizedDescription)"
+                    )
+                }
+            }
+
+            let started = Date()
+            let result = await CleanupPipeline.run(
+                raw: raw,
+                config: config,
+                codex: cleaner,
+                local: localCleaner
+            )
+            let duration = Date().timeIntervalSince(started)
+            AppLog.write("cleaner-test output: \(result.output)")
+            AppLog.write(
+                "cleaner-test backend=\(result.backend.rawValue) "
+                    + "fallback=\(result.fallback)"
+            )
+            AppLog.write(
+                "cleaner-test duration=\(formatSeconds(duration))s"
+            )
+            if let error = result.error {
+                AppLog.write("cleaner-test error: \(error)")
+            }
+
             do {
-                try await cleaner.start()
-                let started = Date()
-                let cleaned = try await cleaner.clean(raw)
-                AppLog.write(
-                    "cleaner-test output: \(cleaned)"
+                try History.append(
+                    HistoryEntry(
+                        audioSeconds: 0,
+                        raw: raw,
+                        result: result,
+                        transcribeDuration: 0
+                    )
                 )
-                AppLog.write(
-                    "cleaner-test duration=\(formatSeconds(Date().timeIntervalSince(started)))s"
-                )
+                AppLog.write("cleaner-test history appended")
             } catch {
                 AppLog.write(
-                    "cleaner-test failed: \(error.localizedDescription)"
+                    "cleaner-test history append failed: "
+                        + error.localizedDescription
                 )
-                AppLog.write("cleaner-test raw fallback: \(raw)")
             }
+
             await cleaner.shutdown()
             NSApplication.shared.terminate(nil)
         }
@@ -334,6 +379,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSWorkspace.shared.open(Config.directoryURL)
         } catch {
             AppLog.write("Unable to open config folder: \(error.localizedDescription)")
+        }
+    }
+
+
+    @objc
+    private func openHistory() {
+        do {
+            try History.ensureFileExists()
+            NSWorkspace.shared.activateFileViewerSelecting([History.fileURL])
+        } catch {
+            AppLog.write("Unable to open history: \(error.localizedDescription)")
         }
     }
 
