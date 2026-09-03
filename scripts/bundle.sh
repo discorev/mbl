@@ -55,6 +55,9 @@ rm -rf "$APP"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" "$CONTENTS/Frameworks"
 cp "$BIN_DIR/Voice" "$CONTENTS/MacOS/Voice"
 cp -R "$BIN_DIR/Sparkle.framework" "$CONTENTS/Frameworks/"
+cp "$ROOT/assets/icon/Voice.icns" "$CONTENTS/Resources/Voice.icns"
+cp "$ROOT/assets/icon/Assets.car" "$CONTENTS/Resources/Assets.car"
+cp "$ROOT/assets/icon/Assets.car" "$CONTENTS/Resources/Assets.car"
 
 cat > "$CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -63,6 +66,12 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 <dict>
     <key>CFBundleExecutable</key>
     <string>Voice</string>
+    <key>CFBundleIconFile</key>
+    <string>Voice</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.olliespage.mbl-voice</string>
     <key>CFBundleName</key>

@@ -37,6 +37,8 @@ Open the app and grant Microphone, Input Monitoring, and Accessibility access wh
 
 A stable Apple Development identity matters because an ad-hoc signature loses its Accessibility grant on every rebuild.
 
+The app icon is committed as `assets/icon/Voice.icns` and `assets/icon/Assets.car`. Run `scripts/make-icon.sh` to regenerate both from `assets/icon/mbl.svg`; it needs Xcode for `actool`.
+
 ## Releases
 
 Create and push a version tag:
