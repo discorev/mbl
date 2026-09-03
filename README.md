@@ -31,7 +31,9 @@ Create an app bundle with:
 scripts/bundle.sh
 ```
 
-The script writes `build/Voice.app`. It signs the app with the first Apple Development identity in your keychain, or uses an ad-hoc signature if none is available. Open the app and grant Microphone, Input Monitoring, and Accessibility access when macOS prompts you. Input Monitoring enables the hotkey, and Accessibility enables typing.
+The script writes `build/Voice.app` and signs it with the first Apple Development identity in your keychain. If no identity is available, it exits with an error so rebuilding cannot silently invalidate macOS privacy grants. You can select a specific identity with `VOICE_SIGN_IDENTITY`, or deliberately permit an ad-hoc signature with `VOICE_ALLOW_ADHOC_SIGNING=1 scripts/bundle.sh`.
+
+Open the app and grant Microphone, Input Monitoring, and Accessibility access when macOS prompts you. Input Monitoring enables the hotkey, and Accessibility enables typing.
 
 A stable Apple Development identity matters because an ad-hoc signature loses its Accessibility grant on every rebuild.
 

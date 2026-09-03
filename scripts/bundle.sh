@@ -2,7 +2,26 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+export DEVELOPER_DIR=$(xcode-select -p)
+
+IDENTITY=${VOICE_SIGN_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development: [^"]*\)".*/\1/p' | head -1)}
+if [ -z "$IDENTITY" ]; then
+    if [ "${VOICE_ALLOW_ADHOC_SIGNING:-0}" = "1" ]; then
+        IDENTITY=-
+    else
+        printf '%s\n' \
+            'ERROR: No Apple Development signing identity found.' \
+            'Install a signing certificate or set VOICE_SIGN_IDENTITY to a valid identity.' \
+            'To deliberately use an unstable ad-hoc signature, rerun with:' \
+            '  VOICE_ALLOW_ADHOC_SIGNING=1 scripts/bundle.sh' >&2
+        exit 1
+    fi
+fi
+if [ "$IDENTITY" = "-" ]; then
+    printf '%s\n' \
+        'WARNING: Voice.app will be ad-hoc signed.' \
+        'macOS privacy permissions will need to be granted again after each rebuild.' >&2
+fi
 
 cd "$ROOT"
 swift build -c release
@@ -41,6 +60,5 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-IDENTITY=${VOICE_SIGN_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development: [^"]*\)".*/\1/p' | head -1)}
-codesign --force --deep --sign "${IDENTITY:--}" "$APP"
+codesign --force --deep --sign "$IDENTITY" "$APP"
 printf '%s\n' "$APP"
