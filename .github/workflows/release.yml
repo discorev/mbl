@@ -40,11 +40,11 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$P12_PATH" -k "$KEYCHAIN_PATH" -P "$DEVID_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security import "$P12_PATH" -k "$KEYCHAIN_PATH" -f pkcs12 -P "$DEVID_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
           curl --fail --silent --show-error --location https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$G2_CERT_PATH"
-          security import "$G2_CERT_PATH" -k "$KEYCHAIN_PATH"
+          security import "$G2_CERT_PATH" -k "$KEYCHAIN_PATH" -f x509
           IDENTITIES=$(security find-identity -v -p codesigning)
           printf '%s\n' "$IDENTITIES"
           printf '%s\n' "$IDENTITIES" | grep -q "Developer ID Application:.*(${APPLE_TEAM_ID})" || { echo "No Developer ID Application identity for team $APPLE_TEAM_ID" >&2; exit 1; }
