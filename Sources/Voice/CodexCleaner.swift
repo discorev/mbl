@@ -28,6 +28,7 @@ actor CodexCleaner: Cleaner {
     private var turnCount = 0
     private var startup: (token: UUID, task: Task<StartedServer, Error>)?
     private var notificationTask: Task<Void, Never>?
+    private var sessionToken: UUID?
 
     private var turnWaiters: [String: TurnWaiter] = [:]
     private var completedTurns: [String: Result<String, CodexCleanerError>] = [:]
@@ -255,17 +256,28 @@ actor CodexCleaner: Cleaner {
     }
 
     private func install(_ started: StartedServer) {
+        let token = UUID()
         rpc = started.rpc
         threadID = started.threadID
         promptModificationDate = started.promptModificationDate
         turnCount = 0
+        sessionToken = token
         notificationTask?.cancel()
         notificationTask = Task { [weak self] in
             for await notification in started.notifications {
                 guard !Task.isCancelled else { return }
                 await self?.handle(notification)
             }
+            guard !Task.isCancelled else { return }
+            await self?.notificationStreamEnded(sessionToken: token)
         }
+    }
+
+    private func notificationStreamEnded(sessionToken: UUID) {
+        guard self.sessionToken == sessionToken else { return }
+        notificationTask = nil
+        _ = clearSession()
+        failTurnWaiters(with: .serverDisconnected)
     }
 
     private func rotateThreadIfNeeded() async throws {
@@ -452,6 +464,7 @@ actor CodexCleaner: Cleaner {
         rpc = nil
         threadID = nil
         promptModificationDate = nil
+        sessionToken = nil
         turnCount = 0
         return activeRPC
     }
@@ -505,6 +518,7 @@ enum CodexCleanerError: LocalizedError, Sendable {
     case turnFailed(String)
     case missingAgentMessage
     case timeout(seconds: Int)
+    case serverDisconnected
     case stopped
 
     var errorDescription: String? {
@@ -521,6 +535,8 @@ enum CodexCleanerError: LocalizedError, Sendable {
             "Codex cleanup turn completed without an agent message."
         case let .timeout(seconds):
             "Codex cleanup timed out after \(seconds) seconds."
+        case .serverDisconnected:
+            "Codex app-server disconnected during cleanup."
         case .stopped:
             "Codex cleaner stopped."
         }
