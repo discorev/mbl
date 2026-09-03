@@ -22,7 +22,7 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
     <key>CFBundleExecutable</key>
     <string>Voice</string>
     <key>CFBundleIdentifier</key>
-    <string>dev.ollie.voice</string>
+    <string>com.olliespage.mbl-voice</string>
     <key>CFBundleName</key>
     <string>Voice</string>
     <key>CFBundlePackageType</key>
