@@ -6,15 +6,6 @@ struct CodexBinary: Sendable {
     let environment: [String: String]
 
     static func resolve(fileManager: FileManager = .default) -> CodexBinary? {
-        let fixedPath = "/Users/ollie/Library/pnpm/bin/codex"
-        if fileManager.isExecutableFile(atPath: fixedPath) {
-            return make(
-                path: fixedPath,
-                source: "configured pnpm path",
-                fileManager: fileManager
-            )
-        }
-
         if let path = resolveWithEnv(), fileManager.isExecutableFile(atPath: path) {
             return make(
                 path: path,

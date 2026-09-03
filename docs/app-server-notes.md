@@ -13,7 +13,7 @@ Send one request:
 The experimental capability is required because `dynamicTools` is currently experimental. The response shape received was:
 
 ```json
-{"id":1,"result":{"userAgent":"voice/0.152.1 (Mac OS 26.7.0; arm64) ghostty/1.3.1 (voice; 0.1)","codexHome":"/Users/ollie/.codex","platformFamily":"unix","platformOs":"macos"}}
+{"id":1,"result":{"userAgent":"voice/0.152.1 (Mac OS 26.7.0; arm64) ghostty/1.3.1 (voice; 0.1)","codexHome":"~/.codex","platformFamily":"unix","platformOs":"macos"}}
 ```
 
 After that response, send this notification with no `id`:
@@ -27,13 +27,13 @@ After that response, send this notification with no `id`:
 The exact request used was:
 
 ```json
-{"method":"thread/start","id":2,"params":{"model":"gpt-5.6-luna","cwd":"/Users/ollie/Developer/voice","approvalPolicy":"never","sandbox":"read-only","developerInstructions":"Clean the supplied dictation and output only the cleaned text. Do not use tools.","ephemeral":true,"dynamicTools":[]}}
+{"method":"thread/start","id":2,"params":{"model":"gpt-5.6-luna","cwd":"~/Developer/voice","approvalPolicy":"never","sandbox":"read-only","developerInstructions":"Clean the supplied dictation and output only the cleaned text. Do not use tools.","ephemeral":true,"dynamicTools":[]}}
 ```
 
 Relevant response fields received:
 
 ```json
-{"id":2,"result":{"thread":{"id":"01a0646a-1d33-7240-8f8d-864ad0dfedd3","ephemeral":true,"status":{"type":"idle"},"path":null,"cwd":"/Users/ollie/Developer/voice"},"model":"gpt-5.6-luna","modelProvider":"openai","cwd":"/Users/ollie/Developer/voice","approvalPolicy":"never","sandbox":{"type":"readOnly","networkAccess":false}}}
+{"id":2,"result":{"thread":{"id":"01a0646a-1d33-7240-8f8d-864ad0dfedd3","ephemeral":true,"status":{"type":"idle"},"path":null,"cwd":"~/Developer/voice"},"model":"gpt-5.6-luna","modelProvider":"openai","cwd":"~/Developer/voice","approvalPolicy":"never","sandbox":{"type":"readOnly","networkAccess":false}}}
 ```
 
 This confirms that `gpt-5.6-luna` was accepted. The full response contains additional fields, so the Swift decoder should either model them as optional or ignore unknown keys.
