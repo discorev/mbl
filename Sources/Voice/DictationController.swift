@@ -157,6 +157,10 @@ final class DictationController {
         hud.resetPosition()
     }
 
+    func prewarmRecorder() {
+        recorder.prewarm()
+    }
+
     func shutdown() {
         stopPreviewTimer()
         previewTask?.cancel()

@@ -8,11 +8,19 @@ final class Recorder {
     private var converter: AudioInputConverter?
     private var isRecording = false
 
+    /// Configure the input graph without starting it, so the mic stays off
+    /// but the first real start is fast.
+    func prewarm() {
+        _ = engine.inputNode.outputFormat(forBus: 0)
+        engine.prepare()
+    }
+
     func start() throws {
         guard !isRecording else {
             return
         }
 
+        let startedAt = Date()
         accumulator.reset()
 
         let input = engine.inputNode
@@ -39,6 +47,9 @@ final class Recorder {
         do {
             try engine.start()
             isRecording = true
+            AppLog.write(
+                "recorder start: " + String(format: "%.3f", Date().timeIntervalSince(startedAt)) + "s"
+            )
         } catch {
             input.removeTap(onBus: 0)
             engine.reset()
