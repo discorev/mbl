@@ -37,6 +37,25 @@ Open the app and grant Microphone, Input Monitoring, and Accessibility access wh
 
 A stable Apple Development identity matters because an ad-hoc signature loses its Accessibility grant on every rebuild.
 
+## Releases
+
+Create and push a version tag:
+
+```sh
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+The release workflow signs and notarizes the app, then publishes `Voice-X.Y.Z.zip` and `appcast.xml` on the GitHub Release. Local builds do not self-update.
+
+The following secrets live in the GitHub `release` environment, which is restricted to `v*` tags:
+
+- `DEVID_P12_BASE64`
+- `DEVID_P12_PASSWORD`
+- `ASC_KEY_ID`
+- `ASC_ISSUER_ID`
+- `ASC_KEY_P8`
+
 ## Configuration
 
 mbl creates `~/.config/voice/config.json` on first launch. Changes to this file are picked up automatically while mbl runs.

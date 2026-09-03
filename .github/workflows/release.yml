@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    environment: release
+    env:
+      APPLE_TEAM_ID: D6AAJCLH87
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Derive version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Import signing identity
+        shell: bash
+        env:
+          DEVID_P12_BASE64: ${{ secrets.DEVID_P12_BASE64 }}
+          DEVID_P12_PASSWORD: ${{ secrets.DEVID_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          P12_PATH=$(mktemp "$RUNNER_TEMP/developer-id.XXXXXX")
+          G2_CERT_PATH=$(mktemp "$RUNNER_TEMP/developer-id-g2.XXXXXX")
+          KEYCHAIN_PATH="$RUNNER_TEMP/voice-signing-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 32)
+          trap 'rm -f "$P12_PATH" "$G2_CERT_PATH"' EXIT
+          printf '%s' "$DEVID_P12_BASE64" | base64 --decode > "$P12_PATH"
+          printf 'KEYCHAIN_PATH=%s\n' "$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$P12_PATH" -k "$KEYCHAIN_PATH" -P "$DEVID_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+          curl --fail --silent --show-error --location https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$G2_CERT_PATH"
+          security import "$G2_CERT_PATH" -k "$KEYCHAIN_PATH"
+          IDENTITIES=$(security find-identity -v -p codesigning)
+          printf '%s\n' "$IDENTITIES"
+          printf '%s\n' "$IDENTITIES" | grep -q "Developer ID Application:.*(${APPLE_TEAM_ID})" || { echo "No Developer ID Application identity for team $APPLE_TEAM_ID" >&2; exit 1; }
+          rm -f "$P12_PATH" "$G2_CERT_PATH"
+          trap - EXIT
+
+      - name: Build signed app
+        shell: bash
+        run: |
+          set -euo pipefail
+          VOICE_RELEASE=1 VOICE_VERSION="$VERSION" scripts/bundle.sh
+          codesign --verify --deep --strict --verbose=2 build/Voice.app
+
+      - name: Notarize and staple app
+        shell: bash
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          NOTARY_TEMP_DIR=$(mktemp -d "$RUNNER_TEMP/voice-notary.XXXXXX")
+          ASC_KEY_PATH="$NOTARY_TEMP_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          SUBMISSION_RESULT="$NOTARY_TEMP_DIR/submission.json"
+          trap 'rm -rf "$NOTARY_TEMP_DIR"' EXIT
+          printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+          ditto -c -k --keepParent build/Voice.app build/Voice-notarize.zip
+          SUBMIT_EXIT=0
+          xcrun notarytool submit build/Voice-notarize.zip --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait --timeout 30m --output-format json > "$SUBMISSION_RESULT" || SUBMIT_EXIT=$?
+          cat "$SUBMISSION_RESULT"
+          SUBMISSION_ID=$(plutil -extract id raw -o - "$SUBMISSION_RESULT" 2>/dev/null || true)
+          SUBMISSION_STATUS=$(plutil -extract status raw -o - "$SUBMISSION_RESULT" 2>/dev/null || true)
+          if [ "$SUBMIT_EXIT" -ne 0 ] || [ "$SUBMISSION_STATUS" != "Accepted" ]; then
+            if [ -n "$SUBMISSION_ID" ]; then
+              xcrun notarytool log "$SUBMISSION_ID" --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" || true
+            fi
+            exit 1
+          fi
+          xcrun stapler staple build/Voice.app
+          spctl --assess --type execute --verbose=4 build/Voice.app
+
+      - name: Package release
+        shell: bash
+        run: ditto -c -k --keepParent build/Voice.app "build/Voice-$VERSION.zip"
+
+      - name: Generate appcast
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP_SIZE=$(stat -f %z "build/Voice-$VERSION.zip")
+          PUB_DATE=$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')
+          cat > build/appcast.xml <<XML
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>mbl</title>
+              <item>
+                <title>$VERSION</title>
+                <pubDate>$PUB_DATE</pubDate>
+                <sparkle:version>$VERSION</sparkle:version>
+                <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+                <enclosure url="https://github.com/discorev/mbl-voice/releases/download/v$VERSION/Voice-$VERSION.zip"
+                           length="$ZIP_SIZE" type="application/octet-stream"/>
+              </item>
+            </channel>
+          </rss>
+          XML
+          xmllint --noout build/appcast.xml
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/Voice-${{ env.VERSION }}.zip
+            build/appcast.xml
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
+      - name: Delete temporary keychain
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${KEYCHAIN_PATH:-}" ] && [ -e "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
