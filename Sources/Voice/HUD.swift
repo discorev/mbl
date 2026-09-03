@@ -141,6 +141,7 @@ final class HUD {
         background.wantsLayer = true
         background.layer?.cornerRadius = 18
         background.layer?.masksToBounds = true
+        background.maskImage = Self.roundedMask(radius: 18)
         background.autoresizingMask = [.width, .height]
         panel.contentView = background
 
@@ -256,6 +257,22 @@ final class HUD {
 }
 
 @MainActor
+extension HUD {
+    /// A stretchable rounded-rect mask so the visual effect's backdrop is
+    /// clipped to the pill rather than drawn square behind the corners.
+    fileprivate static func roundedMask(radius: CGFloat) -> NSImage {
+        let size = NSSize(width: radius * 2 + 1, height: radius * 2 + 1)
+        let image = NSImage(size: size, flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
+        image.resizingMode = .stretch
+        return image
+    }
+}
+
 private final class HUDPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
