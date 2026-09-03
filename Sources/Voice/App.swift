@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 
 @main
 @MainActor
@@ -15,52 +16,189 @@ struct VoiceApp {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private enum ModelStatus {
+        case loading
+        case ready
+        case failed
+    }
+
+    private let transcriber = Transcriber()
     private var statusItem: NSStatusItem?
     private var hotkey: Hotkey?
-    private var config: Config?
+    private var dictation: DictationController?
+    private var modelLoadTask: Task<Void, Never>?
+    private var selfTestTask: Task<Void, Never>?
+    private var modelStatus = ModelStatus.loading
+    private var isListening = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        AppLog.startSession()
+        let selfTestPath = ProcessInfo.processInfo.environment["VOICE_SELFTEST"]
+            .flatMap { $0.isEmpty ? nil : $0 }
+        AppLog.startSession(truncate: selfTestPath == nil)
 
-        do {
-            config = try Config.load()
-            AppLog.write("config loaded")
-        } catch {
-            AppLog.write("Unable to load config: \(error.localizedDescription)")
+        if let selfTestPath {
+            runSelfTest(path: selfTestPath)
+            return
         }
 
-        let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "mic",
-            accessibilityDescription: "Voice"
+        let config = loadConfig()
+        configureDictation(config: config)
+        configureStatusItem()
+        configureHotkey()
+        requestMicrophonePermission()
+        beginModelLoading()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        modelLoadTask?.cancel()
+        selfTestTask?.cancel()
+        dictation?.shutdown()
+        hotkey?.stop()
+    }
+
+    private func loadConfig() -> Config {
+        do {
+            let config = try Config.load()
+            AppLog.write("config loaded")
+            return config
+        } catch {
+            AppLog.write(
+                "Unable to load config; using defaults: \(error.localizedDescription)"
+            )
+            return .fallbackValue
+        }
+    }
+
+    private func configureDictation(config: Config) {
+        let controller = DictationController(
+            recorder: Recorder(),
+            transcriber: transcriber,
+            paster: Paster(),
+            hud: HUD(bottomInset: CGFloat(config.hudBottomInset)),
+            config: config,
+            onListeningChanged: { [weak self] listening in
+                self?.isListening = listening
+                self?.updateStatusIcon()
+            }
+        )
+        dictation = controller
+    }
+
+    private func configureStatusItem() {
+        let statusItem = NSStatusBar.system.statusItem(
+            withLength: NSStatusItem.squareLength
         )
         statusItem.menu = makeMenu()
         self.statusItem = statusItem
+        updateStatusIcon()
+    }
 
+    private func configureHotkey() {
         let hotkey = Hotkey(
-            onHold: { [weak self] in
-                self?.setListening(true)
-                AppLog.write("hold")
-            },
-            onRelease: { [weak self] in
-                self?.setListening(false)
-                AppLog.write("release")
-            },
-            onCancel: { [weak self] in
-                self?.setListening(false)
-                AppLog.write("cancel")
-            }
+            onHold: { [weak self] in self?.dictation?.hold() },
+            onRelease: { [weak self] in self?.dictation?.release() },
+            onCancel: { [weak self] in self?.dictation?.cancel() }
         )
         hotkey.start()
         self.hotkey = hotkey
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
-        hotkey?.stop()
+    private func requestMicrophonePermission() {
+        AppLog.write("microphone permission requested")
+        AVCaptureDevice.requestAccess(for: .audio) { granted in
+            Task { @MainActor in
+                AppLog.write(
+                    "microphone permission outcome: \(granted ? "granted" : "denied")"
+                )
+            }
+        }
+    }
+
+    private func beginModelLoading() {
+        AppLog.write("models loading: Parakeet v2")
+        let task = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            let started = Date()
+            do {
+                try await transcriber.load()
+                guard !Task.isCancelled else {
+                    return
+                }
+                modelStatus = .ready
+                dictation?.setModelsReady(true)
+                AppLog.write(
+                    "models loaded: Parakeet v2 in "
+                        + formatSeconds(Date().timeIntervalSince(started))
+                        + "s"
+                )
+            } catch {
+                modelStatus = .failed
+                AppLog.write(
+                    "models failed to load after "
+                        + formatSeconds(Date().timeIntervalSince(started))
+                        + "s: \(error.localizedDescription)"
+                )
+            }
+            updateStatusIcon()
+        }
+        modelLoadTask = task
+        dictation?.setModelLoadTask(task)
+    }
+
+    private func updateStatusIcon() {
+        let symbolName: String
+        let description: String
+
+        if isListening {
+            symbolName = "mic.fill"
+            description = "Voice listening"
+        } else if modelStatus == .ready {
+            symbolName = "mic"
+            description = "Voice"
+        } else {
+            symbolName = "mic.slash"
+            description = modelStatus == .loading
+                ? "Voice loading speech model"
+                : "Voice speech model unavailable"
+        }
+
+        let image = NSImage(
+            systemSymbolName: symbolName,
+            accessibilityDescription: description
+        )
+        if isListening {
+            image?.isTemplate = false
+            statusItem?.button?.image = image?.withSymbolConfiguration(
+                .init(paletteColors: [.systemRed])
+            )
+        } else {
+            statusItem?.button?.image = image
+        }
     }
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
+
+        let resetItem = NSMenuItem(
+            title: "Reset HUD position",
+            action: #selector(resetHUDPosition),
+            keyEquivalent: ""
+        )
+        resetItem.target = self
+        menu.addItem(resetItem)
+
+        let configItem = NSMenuItem(
+            title: "Open config folder",
+            action: #selector(openConfigFolder),
+            keyEquivalent: ""
+        )
+        configItem.target = self
+        menu.addItem(configItem)
+        menu.addItem(.separator())
+
         let quitItem = NSMenuItem(
             title: "Quit Voice",
             action: #selector(quit),
@@ -71,51 +209,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return menu
     }
 
-    private func setListening(_ listening: Bool) {
-        let symbolName = listening ? "mic.fill" : "mic"
-        let image = NSImage(
-            systemSymbolName: symbolName,
-            accessibilityDescription: listening ? "Voice listening" : "Voice"
-        )
-        if listening {
-            image?.isTemplate = false
-            statusItem?.button?.image = image?.withSymbolConfiguration(
-                .init(paletteColors: [.systemRed])
+    private func runSelfTest(path: String) {
+        AppLog.write("self-test requested: \(path)")
+        selfTestTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            let modelStarted = Date()
+            AppLog.write("models loading: Parakeet v2")
+            do {
+                try await transcriber.load()
+                AppLog.write(
+                    "models loaded: Parakeet v2 in "
+                        + formatSeconds(Date().timeIntervalSince(modelStarted))
+                        + "s"
+                )
+
+                let result = try await transcriber.runSelfTest(
+                    at: URL(fileURLWithPath: path)
+                )
+                AppLog.write(
+                    "self-test audio: \(formatSeconds(result.audioSeconds))s, "
+                        + "conversion=\(formatSeconds(result.conversionSeconds))s, "
+                        + "transcription=\(formatSeconds(result.transcriptionSeconds))s"
+                )
+                AppLog.write("self-test transcript: \(result.text)")
+            } catch {
+                AppLog.write("self-test failed: \(error.localizedDescription)")
+            }
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private func formatSeconds(_ seconds: TimeInterval) -> String {
+        String(format: "%.3f", seconds)
+    }
+
+    @objc
+    private func resetHUDPosition() {
+        dictation?.resetHUDPosition()
+    }
+
+    @objc
+    private func openConfigFolder() {
+        do {
+            try FileManager.default.createDirectory(
+                at: Config.directoryURL,
+                withIntermediateDirectories: true
             )
-        } else {
-            statusItem?.button?.image = image
+            NSWorkspace.shared.open(Config.directoryURL)
+        } catch {
+            AppLog.write("Unable to open config folder: \(error.localizedDescription)")
         }
     }
 
     @objc
     private func quit() {
         NSApplication.shared.terminate(nil)
-    }
-}
-
-@MainActor
-enum AppLog {
-    private static let fileURL = URL(fileURLWithPath: "/tmp/voice.log")
-
-    static func startSession() {
-        try? Data().write(to: fileURL)
-        write("Voice started")
-    }
-
-    static func write(_ message: String) {
-        let data = Data("\(message)\n".utf8)
-        try? FileHandle.standardError.write(contentsOf: data)
-
-        if !FileManager.default.fileExists(atPath: fileURL.path) {
-            FileManager.default.createFile(atPath: fileURL.path, contents: nil)
-        }
-
-        guard let handle = try? FileHandle(forWritingTo: fileURL) else {
-            return
-        }
-
-        _ = try? handle.seekToEnd()
-        try? handle.write(contentsOf: data)
-        try? handle.close()
     }
 }

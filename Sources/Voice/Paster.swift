@@ -8,6 +8,10 @@ final class Paster {
     private var pendingSnapshot: PasteboardSnapshot?
     private var restoreTimer: Timer?
 
+    func restorePendingClipboard() {
+        restoreClipboard()
+    }
+
     func deliver(_ text: String) -> PasteDelivery {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .nothing

@@ -12,6 +12,24 @@ struct Config: Codable, Sendable {
     let previewTickMs: Int
     let hudBottomInset: Int
 
+    static let fallbackValue = Config(
+        hotkey: "rightOption",
+        backend: "codex",
+        codexModel: "gpt-5.6-luna",
+        codexThreadMaxTurns: 50,
+        claudeModel: "sonnet",
+        fallback: false,
+        minWordsForCleanup: 4,
+        cleanupTimeoutSeconds: 8,
+        previewTickMs: 500,
+        hudBottomInset: 80
+    )
+
+    static var directoryURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/voice", isDirectory: true)
+    }
+
     static func load(fileManager: FileManager = .default) throws -> Config {
         let directory = fileManager.homeDirectoryForCurrentUser
             .appendingPathComponent(".config/voice", isDirectory: true)
