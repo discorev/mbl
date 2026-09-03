@@ -44,7 +44,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
           curl --fail --silent --show-error --location https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$G2_CERT_PATH"
-          security import "$G2_CERT_PATH" -k "$KEYCHAIN_PATH" -f x509
+          security import "$G2_CERT_PATH" -k "$KEYCHAIN_PATH" -f x509 || echo "Developer ID G2 intermediate already present"
           IDENTITIES=$(security find-identity -v -p codesigning)
           printf '%s\n' "$IDENTITIES"
           printf '%s\n' "$IDENTITIES" | grep -q "Developer ID Application:.*(${APPLE_TEAM_ID})" || { echo "No Developer ID Application identity for team $APPLE_TEAM_ID" >&2; exit 1; }
