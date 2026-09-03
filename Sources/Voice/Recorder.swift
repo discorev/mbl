@@ -41,6 +41,7 @@ final class Recorder {
             isRecording = true
         } catch {
             input.removeTap(onBus: 0)
+            engine.reset()
             self.converter = nil
             accumulator.reset()
             throw error

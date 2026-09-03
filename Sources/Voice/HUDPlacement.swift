@@ -7,7 +7,7 @@ final class HUDPlacement: NSObject {
     private weak var window: NSWindow?
     private let defaults: UserDefaults
     private var bottomInset: CGFloat
-    private var isMovingProgrammatically = false
+    private var programmaticOrigin: NSPoint?
     private var saveTask: Task<Void, Never>?
 
     init(
@@ -60,9 +60,11 @@ final class HUDPlacement: NSObject {
 
     @objc
     private func windowDidMove(_ notification: Notification) {
-        guard !isMovingProgrammatically else {
+        if let programmaticOrigin, window?.frame.origin.isNear(programmaticOrigin) == true {
+            self.programmaticOrigin = nil
             return
         }
+        programmaticOrigin = nil
 
         saveTask?.cancel()
         saveTask = Task { @MainActor [weak self] in
@@ -131,9 +133,8 @@ final class HUDPlacement: NSObject {
         }
 
         saveTask?.cancel()
-        isMovingProgrammatically = true
+        programmaticOrigin = origin
         window.setFrameOrigin(origin)
-        isMovingProgrammatically = false
     }
 
     private func homeScreen() -> NSScreen? {
@@ -174,5 +175,11 @@ final class HUDPlacement: NSObject {
             )
         }
         return descriptors.sorted().joined(separator: "|")
+    }
+}
+
+private extension NSPoint {
+    func isNear(_ other: NSPoint) -> Bool {
+        abs(x - other.x) < 0.5 && abs(y - other.y) < 0.5
     }
 }

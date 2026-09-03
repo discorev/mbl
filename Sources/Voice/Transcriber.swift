@@ -4,10 +4,6 @@ import FluidAudio
 actor Transcriber {
     private var manager: AsrManager?
 
-    var isReady: Bool {
-        manager != nil
-    }
-
     func load() async throws {
         guard manager == nil else {
             return

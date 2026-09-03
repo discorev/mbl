@@ -193,6 +193,9 @@ final class DictationController {
             hud.update(state: .done, text: text)
             handleDelivery(paster.deliver(text))
         } catch {
+            guard !Task.isCancelled, utteranceID == sessionID else {
+                return
+            }
             AppLog.write(
                 "final transcription failed after "
                     + formatSeconds(Date().timeIntervalSince(started))

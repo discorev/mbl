@@ -23,6 +23,7 @@ final class Paster {
         let snapshot = PasteboardSnapshot(pasteboard: pasteboard)
         _ = pasteboard.clearContents()
         guard pasteboard.setString(text, forType: .string) else {
+            snapshot.restore(to: pasteboard)
             AppLog.write("unable to write transcript to the clipboard")
             return .clipboardUnavailable
         }
