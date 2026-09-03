@@ -108,9 +108,27 @@ final class Hotkey {
             return
         }
 
-        if type == .keyDown, !isHeld {
+        if type == .keyDown, !isHeld, Self.isTypingKey(keyCode, flags: flags) {
             onUserKeyDown(keyCode)
         }
+    }
+
+    /// Escape, arrows, function keys and app shortcuts move focus or the
+    /// cursor without leaving a character behind, so they say nothing about
+    /// what sits before the insertion point.
+    private static let nonTypingKeyCodes: Set<Int64> = [
+        53,                     // Escape
+        123, 124, 125, 126,     // arrows
+        115, 116, 119, 121,     // Home, Page Up, End, Page Down
+        122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111, 105, 107, 113,
+        114, 72, 73, 74, 71, 51, 117,  // Help, volume, mute, clear, Delete, Fwd Delete
+    ]
+
+    private static func isTypingKey(_ keyCode: Int64, flags: CGEventFlags) -> Bool {
+        if flags.contains(.maskCommand) || flags.contains(.maskControl) {
+            return false
+        }
+        return !nonTypingKeyCodes.contains(keyCode)
     }
 }
 
