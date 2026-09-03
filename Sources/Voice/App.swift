@@ -33,6 +33,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cleanerStartTask: Task<Void, Never>?
     private var configWatcher: ConfigWatcher?
     private var currentConfig: Config?
+    private var updater: Updater?
+    private var updateMenuItem: NSMenuItem?
+    private var updateState = Updater.State.idle
     private var selfTestTask: Task<Void, Never>?
     private var cleanerTestTask: Task<Void, Never>?
     private var auroraTestTask: Task<Void, Never>?
@@ -69,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.cleaner = cleaner
         configureDictation(config: config, cleaner: cleaner)
         configureStatusItem()
+        configureUpdater()
         configureHotkey(config: config)
         requestMicrophonePermission()
         requestAccessibilityPermission()
@@ -188,6 +192,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateStatusIcon()
     }
 
+    private func configureUpdater() {
+        guard let updater = Updater.makeIfAvailable() else {
+            return
+        }
+
+        self.updater = updater
+        updateState = updater.state
+        updater.onStateChange = { [weak self] state in
+            guard let self else { return }
+            self.updateState = state
+            self.updateUpdateMenuItem(for: state)
+            self.updateStatusIcon()
+        }
+        statusItem?.menu = makeMenu()
+        updateStatusIcon()
+    }
+
     private func configureHotkey(config: Config) {
         let hotkey = Hotkey(
             key: config.hotkey,
@@ -285,22 +306,93 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 : "Voice speech model unavailable"
         }
 
-        let image = NSImage(
+        guard let image = NSImage(
             systemSymbolName: symbolName,
             accessibilityDescription: description
-        )
+        ) else {
+            statusItem?.button?.image = nil
+            return
+        }
+
         if isListening {
-            image?.isTemplate = false
-            statusItem?.button?.image = image?.withSymbolConfiguration(
+            image.isTemplate = false
+            statusItem?.button?.image = image.withSymbolConfiguration(
                 .init(paletteColors: [.systemRed])
             )
+        } else if hasUpdateBadge {
+            let size = NSSize(width: 18, height: 18)
+            let badgeDiameter: CGFloat = 6
+            let badgeRect = NSRect(
+                x: size.width - badgeDiameter - 1,
+                y: size.height - badgeDiameter - 1,
+                width: badgeDiameter,
+                height: badgeDiameter
+            )
+            let ringRect = badgeRect.insetBy(dx: -1, dy: -1)
+            let composite = NSImage(
+                size: size,
+                flipped: false
+            ) { rect in
+                image.draw(in: rect)
+
+                guard let context = NSGraphicsContext.current else {
+                    return true
+                }
+                context.saveGraphicsState()
+                context.compositingOperation = .copy
+                NSColor.clear.setFill()
+                NSBezierPath(ovalIn: ringRect).fill()
+                context.compositingOperation = .sourceOver
+                NSColor.black.setFill()
+                NSBezierPath(ovalIn: badgeRect).fill()
+                context.restoreGraphicsState()
+                return true
+            }
+            composite.isTemplate = true
+            composite.accessibilityDescription = description + ", update available"
+            statusItem?.button?.image = composite
         } else {
             statusItem?.button?.image = image
         }
     }
 
+    private var hasUpdateBadge: Bool {
+        switch updateState {
+        case .available, .ready:
+            true
+        default:
+            false
+        }
+    }
+
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
+        updateMenuItem = nil
+
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String
+        let versionItem = NSMenuItem(
+            title: version.map { "Voice \($0)" } ?? "Voice",
+            action: nil,
+            keyEquivalent: ""
+        )
+        versionItem.isEnabled = false
+        menu.addItem(versionItem)
+        menu.addItem(.separator())
+
+        if updater != nil {
+            let updateItem = NSMenuItem(
+                title: "",
+                action: nil,
+                keyEquivalent: ""
+            )
+            updateItem.target = self
+            updateMenuItem = updateItem
+            updateUpdateMenuItem(for: updateState)
+            menu.addItem(updateItem)
+            menu.addItem(.separator())
+        }
 
         let resetItem = NSMenuItem(
             title: "Reset HUD position",
@@ -335,6 +427,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitItem.target = self
         menu.addItem(quitItem)
         return menu
+    }
+
+    private func updateUpdateMenuItem(for state: Updater.State) {
+        guard let updateMenuItem else { return }
+
+        switch state {
+        case .idle:
+            updateMenuItem.title = "Check for updates"
+            updateMenuItem.action = #selector(checkForUpdates)
+            updateMenuItem.isEnabled = true
+        case .checking:
+            updateMenuItem.title = "Checking for updates…"
+            updateMenuItem.action = nil
+            updateMenuItem.isEnabled = false
+        case let .available(version):
+            updateMenuItem.title = "Download \(version)"
+            updateMenuItem.action = #selector(downloadUpdate)
+            updateMenuItem.isEnabled = true
+        case .downloading:
+            updateMenuItem.title = "Preparing update…"
+            updateMenuItem.action = nil
+            updateMenuItem.isEnabled = false
+        case .ready:
+            updateMenuItem.title = "Install and restart"
+            updateMenuItem.action = #selector(installAndRestart)
+            updateMenuItem.isEnabled = true
+        case .upToDate:
+            updateMenuItem.title = "Up to date"
+            updateMenuItem.action = nil
+            updateMenuItem.isEnabled = false
+        case .failed:
+            updateMenuItem.title = "Update check failed"
+            updateMenuItem.action = nil
+            updateMenuItem.isEnabled = false
+        }
     }
 
     private func runSelfTest(path: String) {
@@ -469,6 +596,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func formatSeconds(_ seconds: TimeInterval) -> String {
         String(format: "%.3f", seconds)
+    }
+
+    @objc
+    private func checkForUpdates() {
+        updater?.checkForUpdates()
+    }
+
+    @objc
+    private func downloadUpdate() {
+        updater?.download()
+    }
+
+    @objc
+    private func installAndRestart() {
+        updater?.installAndRestart()
     }
 
     @objc
