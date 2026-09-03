@@ -41,7 +41,7 @@ mbl creates `~/.config/voice/config.json` on first launch.
 
 | Key | Default | Purpose |
 | --- | --- | --- |
-| `hotkey` | `rightOption` | Push-to-talk key. |
+| `hotkey` | `rightOption` | Push-to-talk key: `rightOption` or `rightControl`. Restart mbl after changing it. |
 | `backend` | `codex` | Primary cleanup backend: `codex` or `local`. |
 | `codexModel` | `gpt-5.6-luna` | Model used by Codex. |
 | `codexThreadMaxTurns` | `50` | Cleanup turns before rotating the warm thread. |

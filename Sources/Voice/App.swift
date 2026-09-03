@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.cleaner = cleaner
         configureDictation(config: config, cleaner: cleaner)
         configureStatusItem()
-        configureHotkey()
+        configureHotkey(config: config)
         requestMicrophonePermission()
         requestAccessibilityPermission()
         if config.backend == .codex {
@@ -128,8 +128,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateStatusIcon()
     }
 
-    private func configureHotkey() {
+    private func configureHotkey(config: Config) {
         let hotkey = Hotkey(
+            key: config.hotkey,
             onHold: { [weak self] in self?.dictation?.hold() },
             onRelease: { [weak self] in self?.dictation?.release() },
             onCancel: { [weak self] in self?.dictation?.cancel() },

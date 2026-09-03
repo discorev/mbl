@@ -10,8 +10,13 @@ enum CleanupFallback: String, Codable, Sendable {
     case none
 }
 
+enum HotkeyKey: String, Codable, Sendable {
+    case rightOption
+    case rightControl
+}
+
 struct Config: Codable, Sendable {
-    let hotkey: String
+    let hotkey: HotkeyKey
     let backend: CleanupBackend
     let codexModel: String
     let codexThreadMaxTurns: Int
@@ -23,7 +28,7 @@ struct Config: Codable, Sendable {
     let minInputVolume: Float
 
     static let fallbackValue = Config(
-        hotkey: "rightOption",
+        hotkey: .rightOption,
         backend: .codex,
         codexModel: "gpt-5.6-luna",
         codexThreadMaxTurns: 50,
@@ -70,7 +75,7 @@ struct Config: Codable, Sendable {
     }
 
     init(
-        hotkey: String,
+        hotkey: HotkeyKey,
         backend: CleanupBackend,
         codexModel: String,
         codexThreadMaxTurns: Int,
@@ -95,7 +100,7 @@ struct Config: Codable, Sendable {
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        hotkey = try container.decode(String.self, forKey: .hotkey)
+        hotkey = try container.decode(HotkeyKey.self, forKey: .hotkey)
         backend = try container.decode(CleanupBackend.self, forKey: .backend)
         codexModel = try container.decode(String.self, forKey: .codexModel)
         codexThreadMaxTurns = try container.decode(Int.self, forKey: .codexThreadMaxTurns)

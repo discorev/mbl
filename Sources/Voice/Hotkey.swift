@@ -1,12 +1,27 @@
 import CoreGraphics
 import Foundation
 
-private let rightOptionKeyCode: Int64 = 61
 private let escapeKeyCode: Int64 = 53
-private let rightOptionDeviceFlag = CGEventFlags(rawValue: 0x00000040)
+
+private extension HotkeyKey {
+    var keyCode: Int64 {
+        switch self {
+        case .rightOption: 61
+        case .rightControl: 62
+        }
+    }
+
+    var deviceFlag: CGEventFlags {
+        switch self {
+        case .rightOption: CGEventFlags(rawValue: 0x00000040)
+        case .rightControl: CGEventFlags(rawValue: 0x00002000)
+        }
+    }
+}
 
 @MainActor
 final class Hotkey {
+    private let key: HotkeyKey
     private let onHold: () -> Void
     private let onRelease: () -> Void
     private let onCancel: () -> Void
@@ -17,11 +32,13 @@ final class Hotkey {
     private var isHeld = false
 
     init(
+        key: HotkeyKey,
         onHold: @escaping () -> Void,
         onRelease: @escaping () -> Void,
         onCancel: @escaping () -> Void,
         onUserKeyDown: @escaping (Int64) -> Void = { _ in }
     ) {
+        self.key = key
         self.onHold = onHold
         self.onRelease = onRelease
         self.onCancel = onCancel
@@ -53,7 +70,7 @@ final class Hotkey {
 
         eventTap = tap
         runLoopSource = source
-        AppLog.write("hotkey listener started")
+        AppLog.write("hotkey listener started: \(key.rawValue)")
     }
 
     func stop() {
@@ -71,13 +88,14 @@ final class Hotkey {
     fileprivate func receive(
         type: CGEventType,
         keyCode: Int64,
-        rightOptionPressed: Bool
+        flags: CGEventFlags
     ) {
-        if type == .flagsChanged, keyCode == rightOptionKeyCode {
-            if rightOptionPressed, !isHeld {
+        if type == .flagsChanged, keyCode == key.keyCode {
+            let isPressed = flags.contains(key.deviceFlag)
+            if isPressed, !isHeld {
                 isHeld = true
                 onHold()
-            } else if !rightOptionPressed, isHeld {
+            } else if !isPressed, isHeld {
                 isHeld = false
                 onRelease()
             }
@@ -108,12 +126,12 @@ private func hotkeyEventCallback(
 
     let hotkey = Unmanaged<Hotkey>.fromOpaque(userInfo).takeUnretainedValue()
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-    let rightOptionPressed = event.flags.contains(rightOptionDeviceFlag)
+    let flags = event.flags
     MainActor.assumeIsolated {
         hotkey.receive(
             type: type,
             keyCode: keyCode,
-            rightOptionPressed: rightOptionPressed
+            flags: flags
         )
     }
     return Unmanaged.passUnretained(event)
