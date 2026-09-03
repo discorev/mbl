@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import AVFoundation
 
 @main
@@ -46,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureStatusItem()
         configureHotkey()
         requestMicrophonePermission()
+        requestAccessibilityPermission()
         beginModelLoading()
     }
 
@@ -101,6 +103,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         hotkey.start()
         self.hotkey = hotkey
+    }
+
+    private func requestAccessibilityPermission() {
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        AppLog.write("accessibility trusted: \(trusted)")
     }
 
     private func requestMicrophonePermission() {
