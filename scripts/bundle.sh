@@ -41,5 +41,6 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-codesign --force --deep --sign - "$APP"
+IDENTITY=${VOICE_SIGN_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development: [^"]*\)".*/\1/p' | head -1)}
+codesign --force --deep --sign "${IDENTITY:--}" "$APP"
 printf '%s\n' "$APP"
