@@ -204,6 +204,7 @@ final class DictationController {
             }
 
             hud.update(state: .cleaning, text: text)
+            AppLog.write("raw: \(text)")
             let cleanupStarted = Date()
             do {
                 let cleaned = try await cleaner.clean(text)
@@ -211,6 +212,7 @@ final class DictationController {
                 AppLog.write(
                     "cleanup: duration=\(formatSeconds(cleanupDuration))s"
                 )
+                AppLog.write("cleaned: \(cleaned)")
                 guard !Task.isCancelled, utteranceID == sessionID else {
                     return
                 }
