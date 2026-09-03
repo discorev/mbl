@@ -16,12 +16,14 @@ final class AuroraView: NSView {
         var orbit: CGFloat = 0
         var sweep: CGFloat = 0
         var sweepTime: CGFloat = 0
+        var tick: CGFloat = 0
     }
 
     private struct Target {
         let wave: CGFloat
         let orbit: CGFloat
         let sweep: CGFloat
+        var tick: CGFloat = 0
     }
 
     private static let responsiveness: CGFloat = 0.6
@@ -153,6 +155,7 @@ final class AuroraView: NSView {
         blend.wave = ease(blend.wave, toward: target.wave, delta: delta, rate: 9)
         blend.orbit = ease(blend.orbit, toward: target.orbit, delta: delta, rate: 5)
         blend.sweep = ease(blend.sweep, toward: target.sweep, delta: delta, rate: 6)
+        blend.tick = ease(blend.tick, toward: target.tick, delta: delta, rate: 10)
         blend.sweepTime = (blend.sweepTime + delta / 0.7).truncatingRemainder(dividingBy: 1)
 
         phase += delta
@@ -180,10 +183,12 @@ final class AuroraView: NSView {
         for (index, strand) in Self.strands.enumerated() {
             let strandIndex = CGFloat(index)
             let radiusPosition = strandIndex / CGFloat(strandCount - 1)
-            let strandRadius = radius * (
-                1 - Self.orbitRadiusSpread / 2
-                    + Self.orbitRadiusSpread * radiusPosition
-            )
+            // As the tick draws, collapse the radius spread and wobble so the
+            // strands settle into one solid ring around it.
+            let settle = blend.tick
+            let spread = Self.orbitRadiusSpread * (1 - settle)
+            let strandRadius = radius * (1 - spread / 2 + spread * radiusPosition)
+                * (1 + 0.12 * settle)
             let path = CGMutablePath()
             var x: CGFloat = 0
             var isFirstPoint = true
@@ -202,7 +207,7 @@ final class AuroraView: NSView {
                     + wave * window * amplitude * strand.amplitude * (height * 0.46)
 
                 let angle = progress * .pi * 2 + phase * 0.9 + strand.phase
-                let wobble = 1 + 0.10 * sin(
+                let wobble = 1 + 0.10 * (1 - settle) * sin(
                     progress * .pi * 6 + phase * 1.5 + strandIndex
                 )
                 let orbitX = centerX + cos(angle) * strandRadius * wobble
@@ -244,6 +249,39 @@ final class AuroraView: NSView {
         }
 
         context.restoreGState()
+        drawTick(in: context, centerX: centerX, middle: middle, radius: radius)
+    }
+
+    /// A short check mark drawn stroke-by-stroke inside the orbit on done.
+    private func drawTick(in context: CGContext, centerX: CGFloat, middle: CGFloat, radius: CGFloat) {
+        let progress = blend.tick
+        guard progress > 0.02 else { return }
+        let r = radius * 0.55
+        let start = CGPoint(x: centerX - r * 0.55, y: middle + r * 0.05)
+        let corner = CGPoint(x: centerX - r * 0.12, y: middle + r * 0.5)
+        let end = CGPoint(x: centerX + r * 0.6, y: middle - r * 0.45)
+        let firstLength: CGFloat = 0.4
+        context.saveGState()
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.setLineWidth(1.6 * Self.retinaScale * 2)
+        context.setStrokeColor(CGColor(gray: 1, alpha: 0.95 * min(1, progress * 1.5)))
+        context.beginPath()
+        context.move(to: start)
+        if progress <= firstLength {
+            let t = progress / firstLength
+            context.addLine(to: lerp(start, corner, t))
+        } else {
+            context.addLine(to: corner)
+            let t = min(1, (progress - firstLength) / (1 - firstLength))
+            context.addLine(to: lerp(corner, end, t))
+        }
+        context.strokePath()
+        context.restoreGState()
+    }
+
+    private func lerp(_ a: CGPoint, _ b: CGPoint, _ t: CGFloat) -> CGPoint {
+        CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
     }
 
     private func stroke(
@@ -322,6 +360,7 @@ final class AuroraView: NSView {
         blend.orbit = target.orbit
         blend.sweep = target.sweep
         blend.sweepTime = 0.5
+        blend.tick = target.tick
         smoothedLevel = targetLevel
         phase = 0
         drift = 0
@@ -336,7 +375,8 @@ final class AuroraView: NSView {
         case .cleaning:
             Target(wave: 0, orbit: 1, sweep: 0)
         case .done, .cleanedLocally:
-            Target(wave: 0, orbit: 0, sweep: 0)
+            // Hold the orbit and draw a tick inside it; the HUD fades from here.
+            Target(wave: 0, orbit: 1, sweep: 0, tick: 1)
         }
     }
 

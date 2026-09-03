@@ -79,7 +79,7 @@ final class HUD {
         dismissalTask?.cancel()
         dismissalTask = Task { @MainActor [weak self] in
             do {
-                try await Task.sleep(for: .milliseconds(1_200))
+                try await Task.sleep(for: .milliseconds(900))
             } catch {
                 return
             }
@@ -88,7 +88,7 @@ final class HUD {
             }
 
             await NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.2
+                context.duration = 0.45
                 self.panel.animator().alphaValue = 0
             }
             guard !Task.isCancelled else {
