@@ -1,6 +1,8 @@
 import AVFoundation
 import os
 
+/// Keeps the audio engine running from launch so no speech is lost at key-down.
+/// Samples are only accumulated while `isRecording`.
 @MainActor
 final class Recorder {
     private let engine = AVAudioEngine()
@@ -8,12 +10,11 @@ final class Recorder {
     private var converter: AudioInputConverter?
     private var isRecording = false
 
-    func start() throws {
-        guard !isRecording else {
+    /// Warm the engine: install the tap and start capturing into a gated accumulator.
+    func prepare() throws {
+        guard converter == nil else {
             return
         }
-
-        accumulator.reset()
 
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
@@ -38,14 +39,24 @@ final class Recorder {
         engine.prepare()
         do {
             try engine.start()
-            isRecording = true
         } catch {
             input.removeTap(onBus: 0)
             engine.reset()
             self.converter = nil
-            accumulator.reset()
             throw error
         }
+    }
+
+    func start() throws {
+        guard !isRecording else {
+            return
+        }
+        if converter == nil || !engine.isRunning {
+            converter = nil
+            try prepare()
+        }
+        accumulator.open()
+        isRecording = true
     }
 
     func snapshot() -> [Float] {
@@ -56,9 +67,8 @@ final class Recorder {
         guard isRecording else {
             return []
         }
-
-        finishCapture()
-        let capture = accumulator.consume()
+        isRecording = false
+        let capture = accumulator.close()
         if let conversionError = capture.conversionError {
             AppLog.write("audio conversion failed: \(conversionError)")
         }
@@ -66,26 +76,16 @@ final class Recorder {
     }
 
     func cancel() {
-        if isRecording {
-            finishCapture()
-        }
-        accumulator.reset()
+        isRecording = false
+        _ = accumulator.close()
     }
 
-    private func finishCapture() {
+    func shutdown() {
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
-        engine.reset()
-        isRecording = false
-
-        if let converter {
-            do {
-                accumulator.append(try converter.finish())
-            } catch {
-                accumulator.record(error)
-            }
-        }
         converter = nil
+        isRecording = false
+        _ = accumulator.close()
     }
 }
 
@@ -232,6 +232,7 @@ private struct AudioCapture: Sendable {
 
 private final class AudioAccumulator: Sendable {
     private struct State: Sendable {
+        var isOpen = false
         var samples: [Float] = []
         var conversionError: String?
     }
@@ -239,12 +240,15 @@ private final class AudioAccumulator: Sendable {
     private let state = OSAllocatedUnfairLock(initialState: State())
 
     func append(_ samples: [Float]) {
-        state.withLock { $0.samples.append(contentsOf: samples) }
+        state.withLock { state in
+            guard state.isOpen else { return }
+            state.samples.append(contentsOf: samples)
+        }
     }
 
     func record(_ error: Error) {
         state.withLock { state in
-            if state.conversionError == nil {
+            if state.isOpen, state.conversionError == nil {
                 state.conversionError = error.localizedDescription
             }
         }
@@ -254,7 +258,11 @@ private final class AudioAccumulator: Sendable {
         state.withLock { $0.samples }
     }
 
-    func consume() -> AudioCapture {
+    func open() {
+        state.withLock { $0 = State(isOpen: true) }
+    }
+
+    func close() -> AudioCapture {
         state.withLock { state in
             let capture = AudioCapture(
                 samples: state.samples,
@@ -263,9 +271,5 @@ private final class AudioAccumulator: Sendable {
             state = State()
             return capture
         }
-    }
-
-    func reset() {
-        state.withLock { $0 = State() }
     }
 }

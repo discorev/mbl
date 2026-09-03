@@ -161,7 +161,16 @@ final class DictationController {
         stopPreviewTimer()
         previewTask?.cancel()
         finalTask?.cancel()
-        recorder.cancel()
+        recorder.shutdown()
+    }
+
+    func warmRecorder() {
+        do {
+            try recorder.prepare()
+            AppLog.write("audio engine warm")
+        } catch {
+            AppLog.write("audio engine warm-up failed: \(error.localizedDescription)")
+        }
     }
 
     private func reloadConfig() {
