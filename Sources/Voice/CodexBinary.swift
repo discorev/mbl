@@ -16,6 +16,7 @@ struct CodexBinary: Sendable {
 
         let home = fileManager.homeDirectoryForCurrentUser.path
         let commonPaths = [
+            "\(home)/Library/pnpm/codex",
             "\(home)/Library/pnpm/bin/codex",
             "\(home)/.local/bin/codex",
             "\(home)/.bun/bin/codex",
