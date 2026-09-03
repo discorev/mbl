@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cleanerStartTask: Task<Void, Never>?
     private var selfTestTask: Task<Void, Never>?
     private var cleanerTestTask: Task<Void, Never>?
+    private var auroraTestTask: Task<Void, Never>?
     private var modelStatus = ModelStatus.loading
     private var isListening = false
 
@@ -42,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .flatMap { $0.isEmpty ? nil : $0 }
         let cleanerTestText = environment["VOICE_CLEANTEST"]
             .flatMap { $0.isEmpty ? nil : $0 }
+        let runsAuroraTest = environment["VOICE_AURORATEST"] == "1"
         AppLog.startSession(
             truncate: selfTestPath == nil && cleanerTestText == nil
         )
@@ -52,6 +54,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let cleanerTestText {
             runCleanerTest(raw: cleanerTestText)
+            return
+        }
+        if runsAuroraTest {
+            runAuroraTest()
             return
         }
 
@@ -75,6 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         cleanerStartTask?.cancel()
         selfTestTask?.cancel()
         cleanerTestTask?.cancel()
+        auroraTestTask?.cancel()
         dictation?.shutdown()
         hotkey?.stop()
         if let cleaner {
@@ -356,6 +363,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             await cleaner.shutdown()
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private func runAuroraTest() {
+        let hud = HUD(bottomInset: CGFloat(Config.fallbackValue.hudBottomInset))
+        auroraTestTask = Task { @MainActor in
+            AppLog.write("aurora-test state: listening")
+            hud.show(state: .listening, text: "Aurora test")
+
+            let listeningStarted = Date()
+            while Date().timeIntervalSince(listeningStarted) < 2 {
+                let elapsed = Date().timeIntervalSince(listeningStarted)
+                let envelope = 0.5 + 0.5 * sin(elapsed * .pi * 2)
+                hud.setLevel(Float(0.1 + 0.9 * envelope))
+                try? await Task.sleep(for: .milliseconds(33))
+            }
+
+            hud.setLevel(0)
+            AppLog.write("aurora-test state: transcribing")
+            hud.update(state: .transcribing, text: "Transcribing")
+            try? await Task.sleep(for: .seconds(2))
+
+            AppLog.write("aurora-test state: cleaning")
+            hud.update(state: .cleaning, text: "Cleaning")
+            try? await Task.sleep(for: .seconds(2))
+
+            AppLog.write("aurora-test state: done")
+            hud.update(state: .done, text: "Done")
+            try? await Task.sleep(for: .seconds(4))
+
+            hud.hide()
+            AppLog.write("aurora-test complete")
             NSApplication.shared.terminate(nil)
         }
     }

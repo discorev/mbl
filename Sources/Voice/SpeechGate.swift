@@ -5,20 +5,29 @@ import Foundation
 enum SpeechGate {
     /// RMS threshold on 16 kHz float samples; room noise sits well below this.
     private static let rmsThreshold: Float = 0.01
-    private static let windowSize = 1_600  // 100 ms
+    static let rmsWindowSize = 1_600  // 100 ms
 
     static func containsSpeech(_ samples: [Float]) -> Bool {
         var index = 0
-        while index + windowSize <= samples.count {
-            var sum: Float = 0
-            for sample in samples[index..<index + windowSize] {
-                sum += sample * sample
-            }
-            if (sum / Float(windowSize)).squareRoot() >= rmsThreshold {
+        while index + rmsWindowSize <= samples.count {
+            let window = samples[index..<index + rmsWindowSize]
+            if rms(window) >= rmsThreshold {
                 return true
             }
-            index += windowSize
+            index += rmsWindowSize
         }
         return false
+    }
+
+    static func rms(_ samples: ArraySlice<Float>) -> Float {
+        guard !samples.isEmpty else {
+            return 0
+        }
+
+        var sum: Float = 0
+        for sample in samples {
+            sum += sample * sample
+        }
+        return (sum / Float(samples.count)).squareRoot()
     }
 }

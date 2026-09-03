@@ -15,6 +15,7 @@ final class DictationController {
     private var previewTask: Task<Void, Never>?
     private var finalTask: Task<Void, Never>?
     private var previewTimer: Timer?
+    private var levelTimer: Timer?
 
     private var modelsReady = false
     private var isHolding = false
@@ -70,6 +71,7 @@ final class DictationController {
             try recorder.start()
             isRecording = true
             startPreviewTimer()
+            startLevelTimer()
         } catch {
             isHolding = false
             isRecording = false
@@ -88,6 +90,7 @@ final class DictationController {
         isHolding = false
         isRecording = false
         stopPreviewTimer()
+        stopLevelTimer()
         onListeningChanged(false)
 
         let sessionID = utteranceID
@@ -148,6 +151,7 @@ final class DictationController {
         isHolding = false
         isRecording = false
         stopPreviewTimer()
+        stopLevelTimer()
         previewTask?.cancel()
         recorder.cancel()
         latestPreviewText = ""
@@ -166,6 +170,7 @@ final class DictationController {
 
     func shutdown() {
         stopPreviewTimer()
+        stopLevelTimer()
         previewTask?.cancel()
         finalTask?.cancel()
         recorder.cancel()
@@ -310,6 +315,34 @@ final class DictationController {
     private func stopPreviewTimer() {
         previewTimer?.invalidate()
         previewTimer = nil
+    }
+
+    private func startLevelTimer() {
+        stopLevelTimer()
+        hud.setLevel(0)
+        let timer = Timer(
+            timeInterval: 1.0 / 30.0,
+            target: self,
+            selector: #selector(levelTick),
+            userInfo: nil,
+            repeats: true
+        )
+        RunLoop.main.add(timer, forMode: .common)
+        levelTimer = timer
+    }
+
+    private func stopLevelTimer() {
+        levelTimer?.invalidate()
+        levelTimer = nil
+        hud.setLevel(0)
+    }
+
+    @objc
+    private func levelTick() {
+        guard isHolding, isRecording else {
+            return
+        }
+        hud.setLevel(min(1, recorder.recentLevel() * 9))
     }
 
     @objc

@@ -64,6 +64,10 @@ final class Recorder {
         accumulator.snapshot()
     }
 
+    func recentLevel() -> Float {
+        accumulator.recentRMS(windowSize: SpeechGate.rmsWindowSize)
+    }
+
     func stop() -> [Float] {
         guard isRecording else {
             return []
@@ -264,6 +268,17 @@ private final class AudioAccumulator: Sendable {
 
     func snapshot() -> [Float] {
         state.withLock { $0.samples }
+    }
+
+    func recentRMS(windowSize: Int) -> Float {
+        state.withLock { state in
+            let count = min(windowSize, state.samples.count)
+            guard count > 0 else {
+                return 0
+            }
+            let start = state.samples.count - count
+            return SpeechGate.rms(state.samples[start...])
+        }
     }
 
     func consume() -> AudioCapture {

@@ -23,6 +23,7 @@ final class HUD {
 
     private let panel: HUDPanel
     private let stateLabel: NSTextField
+    private let auroraView: AuroraView
     private let textView: NSTextView
     private let scrollView: NSScrollView
     private let placement: HUDPlacement
@@ -42,6 +43,7 @@ final class HUD {
             defer: false
         )
         stateLabel = NSTextField(labelWithString: HUDState.listening.rawValue)
+        auroraView = AuroraView(frame: .zero)
         textView = NSTextView(frame: .zero)
         scrollView = NSScrollView(frame: .zero)
         placement = HUDPlacement(
@@ -60,12 +62,14 @@ final class HUD {
         update(state: state, text: text)
         placement.prepareForShow()
         panel.orderFrontRegardless()
+        auroraView.startAnimating()
     }
 
     func update(state: HUDState, text: String, showsWarning: Bool = false) {
         stateLabel.stringValue = showsWarning
             ? "⚠︎ \(state.rawValue)"
             : state.rawValue
+        auroraView.setState(state)
         textView.string = text
         resizeForText(text)
         textView.scrollToEndOfDocument(nil)
@@ -92,6 +96,7 @@ final class HUD {
             }
             self.panel.orderOut(nil)
             self.panel.alphaValue = 1
+            self.auroraView.stopAnimating()
         }
     }
 
@@ -100,6 +105,11 @@ final class HUD {
         dismissalTask = nil
         panel.orderOut(nil)
         panel.alphaValue = 1
+        auroraView.stopAnimating()
+    }
+
+    func setLevel(_ rms: Float) {
+        auroraView.setLevel(rms)
     }
 
     func update(bottomInset: CGFloat) {
@@ -138,6 +148,8 @@ final class HUD {
         stateLabel.textColor = .secondaryLabelColor
         stateLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        auroraView.translatesAutoresizingMaskIntoConstraints = false
+
         textView.isEditable = false
         textView.isSelectable = false
         textView.drawsBackground = false
@@ -164,6 +176,7 @@ final class HUD {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
         background.addSubview(stateLabel)
+        background.addSubview(auroraView)
         background.addSubview(scrollView)
 
         NSLayoutConstraint.activate([
@@ -180,6 +193,10 @@ final class HUD {
                 constant: Metrics.topPadding
             ),
             stateLabel.heightAnchor.constraint(equalToConstant: Metrics.stateHeight),
+            auroraView.centerXAnchor.constraint(equalTo: background.centerXAnchor),
+            auroraView.centerYAnchor.constraint(equalTo: stateLabel.centerYAnchor),
+            auroraView.widthAnchor.constraint(equalToConstant: 64),
+            auroraView.heightAnchor.constraint(equalToConstant: Metrics.stateHeight),
             scrollView.leadingAnchor.constraint(
                 equalTo: background.leadingAnchor,
                 constant: Metrics.horizontalPadding
