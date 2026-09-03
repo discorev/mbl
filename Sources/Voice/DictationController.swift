@@ -325,7 +325,7 @@ final class DictationController {
         }
 
         let samples = recorder.snapshot()
-        guard samples.count >= 4_800 else {
+        guard samples.count >= 4_800, SpeechGate.containsSpeech(samples) else {
             return
         }
 
