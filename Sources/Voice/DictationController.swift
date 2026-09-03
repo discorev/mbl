@@ -166,8 +166,8 @@ final class DictationController {
         hud.resetPosition()
     }
 
-    func userDidType() {
-        typist.userDidType()
+    func userDidType(keyCode: Int64) {
+        typist.userDidType(keyCode: keyCode)
     }
 
     func prewarmRecorder() {

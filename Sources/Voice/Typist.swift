@@ -8,15 +8,25 @@ final class Typist {
     private static let chunkSize = 20
     private static let returnKeyCode: CGKeyCode = 36
 
-    private var lastTypedAt: Date?
+    private enum CursorContext {
+        case unknown          // nothing typed or dictated recently
+        case afterDictation   // our last output is still under the cursor
+        case freshLine        // user pressed Return (or Enter) since
+        case midLine          // user typed characters since
+    }
+
+    private static let returnKeyCodes: Set<Int64> = [36, 76]
+    private var context: CursorContext = .unknown
+    private var contextAt: Date?
     private var lastTypedEndedWithSpace = true
     private var isTyping = false
 
-    /// Called for any real key press from the user; a keystroke after a
-    /// dictation means the cursor has moved on, so drop the spacing memory.
-    func userDidType() {
+    /// Called for any real key press from the user. Return means the cursor
+    /// is on a fresh line; anything else means the user is mid-line.
+    func userDidType(keyCode: Int64) {
         guard !isTyping else { return }
-        lastTypedAt = nil
+        context = Self.returnKeyCodes.contains(keyCode) ? .freshLine : .midLine
+        contextAt = Date()
     }
 
     func deliver(_ text: String) -> TypeDelivery {
@@ -49,7 +59,8 @@ final class Typist {
                 post(key: Self.returnKeyCode, source: source)
             }
         }
-        lastTypedAt = Date()
+        context = .afterDictation
+        contextAt = Date()
         lastTypedEndedWithSpace = text.last?.isWhitespace ?? true
         return .typed
     }
@@ -61,11 +72,17 @@ final class Typist {
             AppLog.write("focused text: previous char=\(previous.debugDescription)")
             return !previous.isWhitespace && !previous.isNewline
         }
-        guard let lastTypedAt, Date().timeIntervalSince(lastTypedAt) < 60 else {
+        guard let contextAt, Date().timeIntervalSince(contextAt) < 120 else {
             return false
         }
-        AppLog.write("focused text unavailable; using recent-dictation heuristic")
-        return !lastTypedEndedWithSpace
+        let needsSpace: Bool
+        switch context {
+        case .unknown, .freshLine: needsSpace = false
+        case .afterDictation: needsSpace = !lastTypedEndedWithSpace
+        case .midLine: needsSpace = true
+        }
+        AppLog.write("focused text unavailable; cursor context=\(context) -> space=\(needsSpace)")
+        return needsSpace
     }
 
     private func post(unicode: [UniChar], source: CGEventSource) {
