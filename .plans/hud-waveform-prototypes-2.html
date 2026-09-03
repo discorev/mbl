@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mbl · HUD waveform prototypes · round 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F3F5F7; --card:#fff; --line:#D9DEE5; --ink:#171B22; --mute:#5E6672;
+    --signal:#2B4DFF; --signal-soft:#E6EAFF; --clean:#1F9E76;
+    --hud:#1a1d24; --hud-ink:#f2f4f7; --hud-mute:#8b93a1;
+    --r:10px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:15px;line-height:1.5}
+  main{max-width:1080px;margin:0 auto;padding:36px 24px 80px}
+  h1,h2,h3{font-family:"Bricolage Grotesque",sans-serif;margin:0;line-height:1.05;letter-spacing:-.015em}
+  h1{font-size:clamp(34px,5vw,52px);font-weight:700}
+  h2{font-size:26px;font-weight:600;margin-top:48px}
+  h3{font-size:17px;font-weight:600}
+  p{margin:8px 0 0}
+  .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+  kbd{font-family:"JetBrains Mono",monospace;font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 5px;background:#fff}
+
+  .transport{position:sticky;top:0;z-index:5;margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px 12px;box-shadow:0 8px 24px -18px rgba(23,27,34,.35)}
+  .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .btn{font:inherit;font-weight:500;font-size:13.5px;padding:7px 12px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer;color:var(--ink)}
+  .btn.primary{background:var(--signal);border-color:var(--signal);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+  .btn[aria-pressed="true"]{background:var(--signal-soft);border-color:var(--signal);color:var(--signal)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg .btn{border:0;border-radius:0;border-right:1px solid var(--line)}
+  .seg .btn:last-child{border-right:0}
+  .knob{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute)}
+  .knob input[type=range]{width:110px;accent-color:var(--signal)}
+  .knob output{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink);min-width:40px}
+  .spacer{flex:1}
+  #timeline{display:block;width:100%;height:84px;margin-top:12px;border-radius:8px;cursor:ew-resize;touch-action:none}
+  .legend{display:flex;gap:16px;margin-top:8px;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--mute)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:6px}
+
+  .stage{margin-top:22px;border-radius:16px;padding:34px 24px 28px;background:
+    radial-gradient(900px 420px at 20% 0%,#cfd9ff 0%,transparent 60%),
+    radial-gradient(700px 380px at 90% 100%,#ffd9c7 0%,transparent 55%),
+    linear-gradient(160deg,#9aa6c2,#6d7896);display:grid;gap:22px}
+  .stage.dark{background:radial-gradient(800px 400px at 30% 10%,#1b2140 0%,transparent 60%),#0b0d14}
+  .variant{display:grid;grid-template-columns:150px 1fr;gap:18px;align-items:start}
+  .variant .meta{color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.35)}
+  .variant .meta .eyebrow{color:#e8ecf5;opacity:.85}
+  .variant .meta h3{font-size:18px;margin-top:2px}
+  .variant .meta p{font-size:12.5px;line-height:1.4;margin-top:6px;opacity:.95}
+  .variant .meta .pick{display:inline-block;margin-top:8px;font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;background:var(--clean);color:#fff;padding:3px 8px;border-radius:999px;text-shadow:none}
+
+  .hud{width:520px;max-width:100%;background:rgba(26,29,36,.86);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);border-radius:14px;padding:13px 18px 14px;box-shadow:0 10px 30px -12px rgba(0,0,0,.6),inset 0 0 0 .5px rgba(255,255,255,.12);color:var(--hud-ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+  .hud .top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;height:14px}
+  .hud .state{font-size:11.5px;color:var(--hud-mute);letter-spacing:.02em}
+  .hud .wave{width:64px;height:14px;display:block}
+  .hud.wide .wave{width:120px}
+  .hud .body{margin-top:6px;font-size:14px;line-height:1.35;min-height:19px}
+  .hud .body.dim{color:var(--hud-mute)}
+
+  /* zoomed showcase */
+  .zoom{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+  .zoom figure{margin:0;background:#0b0d14;border-radius:12px;padding:14px 14px 10px;border:1px solid #1d2233}
+  .zoom canvas{width:100%;height:84px;display:block}
+  .zoom figcaption{font-family:"JetBrains Mono",monospace;font-size:11px;color:#8b93a1;margin-top:8px}
+  @media (max-width:760px){.variant{grid-template-columns:1fr}.zoom{grid-template-columns:1fr}}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:14px}
+  .tile{border:1px solid var(--line);border-radius:var(--r);background:var(--card);padding:14px 16px;font-size:14px}
+  .tile .k{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--signal);display:block;margin-bottom:4px}
+  .tweak{margin-top:30px;border:2px solid var(--signal);border-radius:14px;padding:18px 20px;background:var(--card)}
+  .tweak .say{display:block;margin-top:8px;font-family:"JetBrains Mono",monospace;font-size:13px;background:var(--signal-soft);padding:8px 11px;border-radius:6px}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">mbl · HUD · waveform prototypes · round 2</div>
+  <h1>Aurora: three ways to gather.</h1>
+  <p style="max-width:700px;color:var(--mute)">E is the wave. What differs is how the five strands behave in <b>cleaning</b>: how they gather, and what keeps them looking like light rather than paint once they overlap. Step through listening → transcribing → cleaning → done with the buttons. Zoomed on top, real size in the HUD below.</p>
+
+  <section class="transport" aria-label="Playback controls">
+    <div class="row">
+      <button class="btn primary" id="play" aria-pressed="false">Play</button>
+      <button class="btn" id="mic" aria-pressed="false">Use my mic</button>
+      <div class="seg" role="group" aria-label="HUD state">
+        <button class="btn" data-state="listening" aria-pressed="true">listening</button>
+        <button class="btn" data-state="transcribing" aria-pressed="false">transcribing</button>
+        <button class="btn" data-state="cleaning" aria-pressed="false">cleaning</button>
+        <button class="btn" data-state="done" aria-pressed="false">done</button>
+      </div>
+      <label class="knob">responsiveness <input type="range" id="resp" min="0" max="1" step="0.05" value="0.6"><output id="respOut">0.60</output></label>
+      <label class="knob">glow <input type="range" id="glow" min="0" max="1" step="0.05" value="0.7"><output id="glowOut">0.70</output></label>
+      <label class="knob">width <input type="range" id="wid" min="64" max="120" step="8" value="64"><output id="widOut">64pt</output></label>
+      <span class="spacer"></span>
+      <span style="font-size:12.5px;color:var(--mute)"><kbd>space</kbd> play · <kbd>←</kbd><kbd>→</kbd> scrub</span>
+    </div>
+    <canvas id="timeline" width="1040" height="84" aria-label="Audio timeline: click or drag to scrub"></canvas>
+    <div class="legend"><span><i style="background:#2B4DFF"></i>speech</span><span><i style="background:#c9cfd9"></i>silence / breath</span><span><i style="background:#171B22"></i>playhead</span></div>
+  </section>
+
+  <h2>Zoomed</h2>
+  <p style="color:var(--mute)">Same renderers, 4× the size, so the strand structure is visible.</p>
+  <div class="zoom">
+    <figure><canvas data-v="e1" data-zoom="1" width="512" height="168"></canvas><figcaption>E1 · full ring, additive — the white-hot orbit</figcaption></figure>
+    <figure><canvas data-v="e2" data-zoom="1" width="512" height="168"></canvas><figcaption>E2 · full strands, additive, cores fade — colour survives</figcaption></figure>
+    <figure><canvas data-v="e3" data-zoom="1" width="512" height="168"></canvas><figcaption>E3 · full strands, glow-only, hue drifts — softest</figcaption></figure>
+  </div>
+
+  <h2>In the HUD</h2>
+  <section class="stage dark" aria-label="Prototypes at real size">
+    <div class="variant">
+      <div class="meta"><div class="eyebrow">E1</div><h3>White-hot orbit</h3><p>The original. All five strands wrap the full ring with additive blending and cores intact, so they sum to a bright white-pink halo. Reads as "energy", loses the palette while cleaning.</p></div>
+      <div class="hud"><div class="top"><span class="state">listening</span><canvas class="wave" data-v="e1" width="128" height="28"></canvas><span></span></div><div class="body dim">…</div></div>
+    </div>
+    <div class="variant">
+      <div class="meta"><div class="eyebrow">E2</div><h3>Coloured orbit</h3><p>Same full-ring geometry and additive glow, but the thin bright core fades as the strands gather and each strand sits on its own radius. Overlaps still add, but from soft glow rather than hot cores, so it stays pastel and you can see all five colours turning.</p><span class="pick">my pick</span></div>
+      <div class="hud"><div class="top"><span class="state">listening</span><canvas class="wave" data-v="e2" width="128" height="28"></canvas><span></span></div><div class="body dim">…</div></div>
+    </div>
+    <div class="variant">
+      <div class="meta"><div class="eyebrow">E3</div><h3>Drifting hue</h3><p>Full ring, glow only, no core at all in orbit, and the whole palette slowly rotates through hue while cleaning. Softest of the three, and the colour shift itself signals "working". Slightly less crisp at 14 pt.</p></div>
+      <div class="hud"><div class="top"><span class="state">listening</span><canvas class="wave" data-v="e3" width="128" height="28"></canvas><span></span></div><div class="body dim">…</div></div>
+    </div>
+  </section>
+
+  <h2>On a light desktop</h2>
+  <p style="color:var(--mute)">The HUD pill is dark either way, so colour holds up. Checking the glow doesn't bleed into the pill edge.</p>
+  <section class="stage" aria-label="Prototypes on a light background">
+    <div class="variant"><div class="meta"><div class="eyebrow">E1</div><h3>White-hot</h3></div><div class="hud"><div class="top"><span class="state">listening</span><canvas class="wave" data-v="e1" width="128" height="28"></canvas><span></span></div><div class="body dim">…</div></div></div>
+    <div class="variant"><div class="meta"><div class="eyebrow">E2</div><h3>Coloured</h3></div><div class="hud"><div class="top"><span class="state">listening</span><canvas class="wave" data-v="e2" width="128" height="28"></canvas><span></span></div><div class="body dim">…</div></div></div>
+    <div class="variant"><div class="meta"><div class="eyebrow">E3</div><h3>Drifting hue</h3></div><div class="hud"><div class="top"><span class="state">listening</span><canvas class="wave" data-v="e3" width="128" height="28"></canvas><span></span></div><div class="body dim">…</div></div></div>
+  </section>
+
+  <h2>How it would be built</h2>
+  <div class="grid">
+    <div class="tile"><span class="k">drawing</span>A CALayer subclass drawing N sine strands per frame with <code>CGContext</code> strokes, <code>.plusLighter</code> blend and a shadow for glow. No Metal needed at this size.</div>
+    <div class="tile"><span class="k">signal</span>Amplitude from the same 100 ms RMS the speech gate uses, smoothed with fast attack and slow release. Strand frequencies are fixed; only amplitude and phase speed respond to level.</div>
+    <div class="tile"><span class="k">states</span>Listening: audio-driven wave. Transcribing: strands relax to a flat line in ~200 ms, then a bright pulse sweeps along it every 0.7 s. Cleaning: the line pinches into a five-colour orbit. Done: orbit unwinds to a still line and fades with the HUD. Each state has its own shape so the strip never looks like it might still be listening.</div>
+    <div class="tile"><span class="k">palette</span>Amber <code>#FFB347</code>, coral <code>#FF5E8A</code>, magenta <code>#C64BFF</code>, violet <code>#6B5BFF</code>, cyan <code>#3FD6FF</code>. Lives in one place so it can be tuned.</div>
+  </div>
+
+  <div class="tweak">
+    <div class="eyebrow">Tweak these</div>
+    <span class="say">build E2</span>
+    <span class="say">build E1, keep the white</span>
+    <span class="say">build E3, slower hue drift</span>
+  </div>
+</main>
+
+<script>
+(function () {
+  var DUR = 12;
+  var REGIONS = [[0,1.1,'s'],[1.1,4.0,'v'],[4.0,4.7,'s'],[4.7,8.4,'v'],[8.4,9.9,'s'],[9.9,11.2,'v'],[11.2,12,'s']];
+  var seed = 7;
+  function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+  var RATE = 200, N = DUR * RATE, env = new Float32Array(N);
+  (function bake() {
+    var syl = 0, sylLen = 0, sylAmp = 0;
+    for (var i = 0; i < N; i++) {
+      var t = i / RATE, r = null;
+      for (var k = 0; k < REGIONS.length; k++) if (t >= REGIONS[k][0] && t < REGIONS[k][1]) r = REGIONS[k];
+      if (!r || r[2] === 's') { env[i] = 0.02 + 0.015 * rnd(); continue; }
+      if (syl <= 0) { sylLen = 0.12 + rnd() * 0.2; syl = sylLen; sylAmp = 0.45 + rnd() * 0.55; }
+      var ph = 1 - syl / sylLen;
+      var shape = Math.pow(Math.sin(Math.PI * Math.min(1, ph * 1.25)), 0.8);
+      env[i] = 0.05 + sylAmp * shape * (0.85 + 0.3 * rnd());
+      syl -= 1 / RATE;
+    }
+  })();
+  function envAt(t) { return env[Math.max(0, Math.min(N - 1, Math.floor((t % DUR) * RATE)))]; }
+
+  var playing = false, t = 0, last = performance.now(), resp = 0.6, glow = 0.7;
+  var hudState = 'listening', micLevel = null;
+  function q(s) { return document.querySelector(s); }
+  var playBtn = q('#play'), micBtn = q('#mic');
+  function setPlaying(p) { playing = p; playBtn.textContent = p ? 'Pause' : 'Play'; playBtn.setAttribute('aria-pressed', String(p)); last = performance.now(); }
+  playBtn.onclick = function () { setPlaying(!playing); };
+  q('#resp').oninput = function (e) { resp = +e.target.value; q('#respOut').value = resp.toFixed(2); };
+  q('#glow').oninput = function (e) { glow = +e.target.value; q('#glowOut').value = glow.toFixed(2); };
+  q('#wid').oninput = function (e) { var w = +e.target.value; q('#widOut').value = w + 'pt'; document.querySelectorAll('.hud .wave').forEach(function (c) { c.style.width = w + 'px'; c.width = w * 2; }); };
+  document.querySelectorAll('[data-state]').forEach(function (b) { b.onclick = function () {
+    hudState = b.dataset.state;
+    document.querySelectorAll('[data-state]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    document.querySelectorAll('.hud .state').forEach(function (s) { s.textContent = hudState; });
+    document.querySelectorAll('.hud .body').forEach(function (s) { var l = hudState === 'listening'; s.textContent = l ? '…' : hudState === 'done' ? 'The planreview upload should retry on any 500 three times, then give up.' : 'so the planreview upload should retry on any 500 three times then give up'; s.classList.toggle('dim', l); });
+  }; });
+  document.addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
+    if (e.code === 'ArrowLeft') t = (t - 0.25 + DUR) % DUR;
+    if (e.code === 'ArrowRight') t = (t + 0.25) % DUR;
+  });
+
+  var audioCtx, analyser, micData;
+  micBtn.onclick = function () {
+    if (micLevel !== null) { micLevel = null; micBtn.setAttribute('aria-pressed', 'false'); micBtn.textContent = 'Use my mic'; return; }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      var src = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser(); analyser.fftSize = 1024;
+      micData = new Float32Array(analyser.fftSize);
+      src.connect(analyser);
+      micLevel = 0; micBtn.setAttribute('aria-pressed', 'true'); micBtn.textContent = 'Mic live · click to stop';
+    }).catch(function () { micBtn.textContent = 'Mic blocked'; });
+  };
+  function readMic() {
+    analyser.getFloatTimeDomainData(micData);
+    var s = 0; for (var i = 0; i < micData.length; i++) s += micData[i] * micData[i];
+    return Math.min(1, Math.sqrt(s / micData.length) * 9);
+  }
+
+  var tl = q('#timeline'), tctx = tl.getContext('2d');
+  function drawTimeline() {
+    var W = tl.width, H = tl.height;
+    tctx.clearRect(0, 0, W, H);
+    REGIONS.forEach(function (r) { tctx.fillStyle = r[2] === 'v' ? '#E6EAFF' : '#F3F5F7'; tctx.fillRect(r[0] / DUR * W, 0, (r[1] - r[0]) / DUR * W, H); });
+    tctx.beginPath();
+    for (var x = 0; x < W; x++) { var v = envAt(x / W * DUR), y = H - 8 - v * (H - 22); if (x) tctx.lineTo(x, y); else tctx.moveTo(x, y); }
+    tctx.strokeStyle = '#2B4DFF'; tctx.lineWidth = 1.5; tctx.stroke();
+    tctx.font = '11px JetBrains Mono, monospace'; tctx.fillStyle = '#5E6672';
+    REGIONS.forEach(function (r) { var lbl = r[2] === 'v' ? 'speech' : (r[1] - r[0]) < 0.9 ? 'breath' : 'silence'; tctx.fillText(lbl, r[0] / DUR * W + 6, 14); });
+    var px = t / DUR * W; tctx.fillStyle = '#171B22'; tctx.fillRect(px - 1, 0, 2, H);
+    if (micLevel !== null) { tctx.fillStyle = 'rgba(243,245,247,.75)'; tctx.fillRect(0, 0, W, H); tctx.fillStyle = '#171B22'; tctx.font = '600 13px IBM Plex Sans, sans-serif'; tctx.fillText('Driven by your microphone', 12, 26); }
+  }
+  var scrubbing = false;
+  function scrubTo(e) { var r = tl.getBoundingClientRect(); t = Math.max(0, Math.min(DUR - 0.001, (e.clientX - r.left) / r.width * DUR)); }
+  tl.addEventListener('pointerdown', function (e) { scrubbing = true; tl.setPointerCapture(e.pointerId); scrubTo(e); });
+  tl.addEventListener('pointermove', function (e) { if (scrubbing) scrubTo(e); });
+  tl.addEventListener('pointerup', function () { scrubbing = false; });
+
+  // ---------- palettes & strand specs ----------
+  var P = { amber: '#FFB347', coral: '#FF5E8A', magenta: '#C64BFF', violet: '#6B5BFF', cyan: '#3FD6FF' };
+  var AURORA = [
+    { c: P.amber,   f: 1.0, a: 0.55, w: 1.2, ph: 0.0 },
+    { c: P.coral,   f: 1.35, a: 0.8, w: 1.4, ph: 1.1 },
+    { c: P.magenta, f: 1.7, a: 1.0, w: 1.6, ph: 2.3 },
+    { c: P.violet,  f: 2.1, a: 0.75, w: 1.3, ph: 3.4 },
+    { c: P.cyan,    f: 2.6, a: 0.5, w: 1.1, ph: 4.6 } ];
+  // orbit treatment per variant
+  var SPECS = {
+    e1: { strands: AURORA, glowMul: 1.0, orbit: { core: 1.0, radiusSpread: 0.0,  glow: 1.2, hueDrift: 0 } },
+    e2: { strands: AURORA, glowMul: 1.0, orbit: { core: 0.0, radiusSpread: 0.28, glow: 0.9, hueDrift: 0 } },
+    e3: { strands: AURORA, glowMul: 1.0, orbit: { core: 0.0, radiusSpread: 0.18, glow: 1.1, hueDrift: 40 } },
+  };
+
+  var waves = [];
+  document.querySelectorAll('canvas[data-v]').forEach(function (c) {
+    waves.push({ c: c, ctx: c.getContext('2d'), v: c.dataset.v, zoom: !!c.dataset.zoom, lvl: 0, phase: 0, drift: 0 });
+  });
+
+  function smooth(prev, target, dt) {
+    var attack = 12 + resp * 40, release = 3 + resp * 9;
+    var k = target > prev ? attack : release;
+    return prev + (target - prev) * Math.min(1, k * dt);
+  }
+
+  // Per-state blend targets for E (aurora). Other variants keep the simple idle drift.
+  // wave: 0..1 audio wave amplitude; flat: 0..1 how collapsed to a line; orbit: 0..1 how gathered into a ring
+  var STATE_TARGET = {
+    listening:    { wave: 1, orbit: 0, sweep: 0 },
+    transcribing: { wave: 0, orbit: 0, sweep: 1 },
+    cleaning:     { wave: 0, orbit: 1, sweep: 0 },
+    done:         { wave: 0, orbit: 0, sweep: 0 },
+  };
+  function ease(prev, target, dt, rate) { return prev + (target - prev) * Math.min(1, rate * dt); }
+
+  function strokeStrand(ctx, colour, st, scale, glowAmt, spec, coreAlpha) {
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = st.w * scale;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = colour;
+    ctx.shadowBlur = (2 + glow * 10 * spec.glowMul) * scale * glowAmt;
+    ctx.globalAlpha = 0.85;
+    ctx.stroke();
+    if (coreAlpha > 0.02) {
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = Math.max(0.6, st.w * scale * 0.45);
+      ctx.globalAlpha = 0.95 * coreAlpha;
+      ctx.stroke();
+    }
+  }
+  function shiftHue(hex, deg) {
+    if (!deg) return hex;
+    var r = parseInt(hex.slice(1,3),16)/255, g = parseInt(hex.slice(3,5),16)/255, b = parseInt(hex.slice(5,7),16)/255;
+    var mx = Math.max(r,g,b), mn = Math.min(r,g,b), l = (mx+mn)/2, d = mx-mn, h = 0, sat = 0;
+    if (d) { sat = l > .5 ? d/(2-mx-mn) : d/(mx+mn);
+      h = mx===r ? (g-b)/d + (g<b?6:0) : mx===g ? (b-r)/d + 2 : (r-g)/d + 4; h /= 6; }
+    h = (h + deg/360 + 1) % 1;
+    function f(p,q,t){ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; }
+    var q = l < .5 ? l*(1+sat) : l+sat-l*sat, p2 = 2*l-q;
+    var R = Math.round(f(p2,q,h+1/3)*255), G = Math.round(f(p2,q,h)*255), B = Math.round(f(p2,q,h-1/3)*255);
+    return 'rgb(' + R + ',' + G + ',' + B + ')';
+  }
+
+  function drawStrands(w, lvl, dt) {
+    var ctx = w.ctx, W = w.c.width, H = w.c.height, spec = SPECS[w.v], ob = spec.orbit;
+    var scale = w.zoom ? 3.2 : 1;
+    var mid = H / 2, pad = W * 0.06, span = W - pad * 2, n = spec.strands.length;
+    w.drift += dt;
+    if (!w.st) w.st = { wave: 1, orbit: 0, sweep: 0, sweepT: 0, hue: 0 };
+    var tg = STATE_TARGET[hudState] || STATE_TARGET.listening;
+    w.st.wave  = ease(w.st.wave,  tg.wave,  dt, 9);
+    w.st.orbit = ease(w.st.orbit, tg.orbit, dt, 5);
+    w.st.sweep = ease(w.st.sweep, tg.sweep, dt, 6);
+    w.st.sweepT = (w.st.sweepT + dt / 0.7) % 1;
+    w.st.hue = (w.st.hue + dt * ob.hueDrift * w.st.orbit) % 360;
+
+    var amp = Math.max(0.05, lvl) * w.st.wave;
+    w.phase += dt * (2.5 + lvl * 9) * (0.3 + 0.7 * w.st.wave) + dt * 2.6 * w.st.orbit;
+    var R = H * 0.34, cx = W / 2, k = w.st.orbit;
+
+    ctx.globalCompositeOperation = 'lighter';
+    for (var s = 0; s < n; s++) {
+      var st = spec.strands[s];
+      var rad = R * (1 - ob.radiusSpread / 2 + ob.radiusSpread * (s / (n - 1)));
+      ctx.beginPath();
+      for (var x = 0; x <= span; x += 1) {
+        var u = x / span;
+        var win = Math.sin(Math.PI * u);
+        var wave = Math.sin(u * Math.PI * 2 * st.f + w.phase * (0.7 + 0.3 * s / n) + st.ph);
+        var lx = pad + x, ly = mid + wave * win * amp * st.a * (H * 0.46);
+        // full ring per strand; small per-strand wobble so they breathe against each other
+        var ang = u * Math.PI * 2 + w.phase * 0.9 + st.ph;
+        var wob = 1 + 0.10 * Math.sin(u * Math.PI * 6 + w.phase * 1.5 + s);
+        var ox = cx + Math.cos(ang) * rad * wob, oy = mid + Math.sin(ang) * rad * wob;
+        var px = lx + (ox - lx) * k, py = ly + (oy - ly) * k;
+        if (x) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      }
+      var glowAmt = (0.4 + amp) * (1 - k) + ob.glow * (0.6 + 0.4 * Math.sin(w.drift * 2 + s)) * k;
+      var coreAlpha = 1 - k * (1 - ob.core);
+      strokeStrand(ctx, shiftHue(st.c, w.st.hue), st, scale, glowAmt, spec, coreAlpha);
+    }
+
+    if (w.st.sweep > 0.02) {
+      var sw = 0.18, head = w.st.sweepT * (1 + sw) - sw;
+      for (var s2 = 0; s2 < n; s2++) {
+        var st2 = spec.strands[s2];
+        var a = Math.max(0, head - sw * (1 - s2 / n) * 0.6), b = Math.min(1, head + sw * 0.35);
+        if (b <= a) continue;
+        ctx.beginPath();
+        ctx.moveTo(pad + a * span, mid); ctx.lineTo(pad + b * span, mid);
+        ctx.strokeStyle = st2.c; ctx.lineCap = 'round';
+        ctx.lineWidth = (st2.w * 1.6) * scale;
+        ctx.shadowColor = st2.c; ctx.shadowBlur = (6 + glow * 14) * scale;
+        ctx.globalAlpha = 0.9 * w.st.sweep * (1 - k);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var lvlSmooth = 0;
+  function frame(now) {
+    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (playing && micLevel === null) t = (t + dt) % DUR;
+    var raw = micLevel !== null ? readMic() : envAt(t);
+    lvlSmooth = smooth(lvlSmooth, raw, dt);
+    for (var i = 0; i < waves.length; i++) { var w = waves[i]; w.ctx.clearRect(0, 0, w.c.width, w.c.height); drawStrands(w, lvlSmooth, dt); }
+    drawTimeline();
+    requestAnimationFrame(frame);
+  }
+  if (!reduced) setPlaying(true);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

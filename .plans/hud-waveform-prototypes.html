@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mbl · HUD waveform prototypes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F3F5F7; --card:#fff; --line:#D9DEE5; --ink:#171B22; --mute:#5E6672;
+    --signal:#2B4DFF; --signal-soft:#E6EAFF; --clean:#1F9E76; --clean-soft:#E2F5EE;
+    --hud:#1a1d24; --hud-ink:#f2f4f7; --hud-mute:#8b93a1; --wave:#ffffff;
+    --r:10px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:15px;line-height:1.5}
+  main{max-width:1080px;margin:0 auto;padding:36px 24px 80px}
+  h1,h2,h3{font-family:"Bricolage Grotesque",sans-serif;margin:0;line-height:1.05;letter-spacing:-.015em}
+  h1{font-size:clamp(34px,5vw,52px);font-weight:700}
+  h2{font-size:26px;font-weight:600;margin-top:48px}
+  h3{font-size:17px;font-weight:600}
+  p{margin:8px 0 0}
+  .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+  code{font-family:"JetBrains Mono",monospace;font-size:.88em;background:#E9EDF2;padding:1px 5px;border-radius:4px}
+  kbd{font-family:"JetBrains Mono",monospace;font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 5px;background:#fff}
+
+  /* ---- transport ---- */
+  .transport{position:sticky;top:0;z-index:5;margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px 12px;box-shadow:0 8px 24px -18px rgba(23,27,34,.35)}
+  .transport .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .btn{font:inherit;font-weight:500;font-size:13.5px;padding:7px 12px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer;color:var(--ink)}
+  .btn.primary{background:var(--signal);border-color:var(--signal);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+  .btn[aria-pressed="true"]{background:var(--signal-soft);border-color:var(--signal);color:var(--signal)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg .btn{border:0;border-radius:0;border-right:1px solid var(--line)}
+  .seg .btn:last-child{border-right:0}
+  .knob{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute)}
+  .knob input[type=range]{width:120px;accent-color:var(--signal)}
+  .knob output{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink);min-width:44px}
+  .spacer{flex:1}
+  #timeline{display:block;width:100%;height:84px;margin-top:12px;border-radius:8px;cursor:ew-resize;touch-action:none}
+  .legend{display:flex;gap:16px;margin-top:8px;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--mute)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:6px}
+
+  /* ---- desktop stage ---- */
+  .stage{margin-top:22px;border-radius:16px;padding:34px 24px 28px;background:
+    radial-gradient(900px 420px at 20% 0%,#cfd9ff 0%,transparent 60%),
+    radial-gradient(700px 380px at 90% 100%,#ffd9c7 0%,transparent 55%),
+    linear-gradient(160deg,#9aa6c2,#6d7896);display:grid;gap:22px}
+  .variant{display:grid;grid-template-columns:150px 1fr;gap:18px;align-items:start}
+  .variant .meta{color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.35)}
+  .variant .meta .eyebrow{color:#e8ecf5;opacity:.85}
+  .variant .meta h3{font-size:18px;margin-top:2px}
+  .variant .meta p{font-size:12.5px;line-height:1.4;margin-top:6px;opacity:.95}
+  .variant .meta .pick{display:inline-block;margin-top:8px;font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;background:#1F9E76;color:#fff;padding:3px 8px;border-radius:999px;text-shadow:none}
+
+  /* HUD replica: 520pt wide, dark hud pill */
+  .hud{width:520px;max-width:100%;background:rgba(26,29,36,.86);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);border-radius:14px;padding:13px 18px 14px;box-shadow:0 10px 30px -12px rgba(0,0,0,.6),inset 0 0 0 .5px rgba(255,255,255,.12);color:var(--hud-ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+  .hud .top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;height:14px}
+  .hud .state{font-size:11.5px;color:var(--hud-mute);letter-spacing:.02em}
+  .hud .wave{width:64px;height:14px;display:block}
+  .hud .body{margin-top:6px;font-size:14px;line-height:1.35;min-height:19px}
+  .hud .body.dim{color:var(--hud-mute)}
+
+  /* ---- notes ---- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:14px}
+  .tile{border:1px solid var(--line);border-radius:var(--r);background:var(--card);padding:14px 16px;font-size:14px}
+  .tile .k{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--signal);display:block;margin-bottom:4px}
+  .tweak{margin-top:30px;border:2px solid var(--signal);border-radius:14px;padding:18px 20px;background:var(--card)}
+  .tweak .say{display:block;margin-top:8px;font-family:"JetBrains Mono",monospace;font-size:13px;background:var(--signal-soft);padding:8px 11px;border-radius:6px}
+  @media (prefers-reduced-motion:reduce){ .hint{display:none} }
+  @media (max-width:760px){.variant{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">mbl · HUD · waveform prototypes</div>
+  <h1>A small sign that it's listening.</h1>
+  <p style="max-width:680px;color:var(--mute)">Four candidates for the indicator that sits in the HUD's state row. All four are driven by the same synthetic audio envelope below, so silence, a breath, and a burst of speech hit each one at the same moment. Scrub the timeline or point them at your real microphone.</p>
+
+  <section class="transport" aria-label="Playback controls">
+    <div class="row">
+      <button class="btn primary" id="play" aria-pressed="false">Play</button>
+      <button class="btn" id="mic" aria-pressed="false">Use my mic</button>
+      <div class="seg" role="group" aria-label="HUD state">
+        <button class="btn" data-state="listening" aria-pressed="true">listening</button>
+        <button class="btn" data-state="transcribing" aria-pressed="false">transcribing</button>
+        <button class="btn" data-state="cleaning" aria-pressed="false">cleaning</button>
+      </div>
+      <label class="knob">responsiveness
+        <input type="range" id="resp" min="0" max="1" step="0.05" value="0.55">
+        <output id="respOut">0.55</output>
+      </label>
+      <label class="knob">speed
+        <input type="range" id="speed" min="0.5" max="1.5" step="0.1" value="1">
+        <output id="speedOut">1.0×</output>
+      </label>
+      <span class="spacer"></span>
+      <span class="hint" style="font-size:12.5px;color:var(--mute)"><kbd>space</kbd> play · <kbd>←</kbd><kbd>→</kbd> scrub</span>
+    </div>
+    <canvas id="timeline" width="1040" height="84" aria-label="Audio timeline: click or drag to scrub"></canvas>
+    <div class="legend"><span><i style="background:#2B4DFF"></i>speech</span><span><i style="background:#c9cfd9"></i>silence / breath</span><span><i style="background:#171B22"></i>playhead</span></div>
+  </section>
+
+  <section class="stage" aria-label="Prototypes on a desktop background">
+    <div class="variant">
+      <div class="meta"><div class="eyebrow">A</div><h3>Five bars</h3><p>The idiom everyone reads as "listening". Bars rest as dots on silence and rise with energy. Centre bar leads, outer bars lag.</p></div>
+      <div class="hud"><div class="top"><span class="state">listening</span><canvas class="wave" data-v="bars" width="128" height="28"></canvas><span></span></div><div class="body dim">…</div></div>
+    </div>
+    <div class="variant">
+      <div class="meta"><div class="eyebrow">B</div><h3>Mirrored strands</h3><p>Nine hairline bars mirrored around the midline. Quieter than A, more like a meter than a mascot. Silence is a flat rule.</p><span class="pick">my pick</span></div>
+      <div class="hud"><div class="top"><span class="state">listening</span><canvas class="wave" data-v="strands" width="128" height="28"></canvas><span></span></div><div class="body dim">…</div></div>
+    </div>
+    <div class="variant">
+      <div class="meta"><div class="eyebrow">C</div><h3>Scope line</h3><p>A scrolling trace, like a tiny oscilloscope. Reads as continuous rather than rhythmic. Flatlines on silence, which some people find ominous.</p></div>
+      <div class="hud"><div class="top"><span class="state">listening</span><canvas class="wave" data-v="scope" width="128" height="28"></canvas><span></span></div><div class="body dim">…</div></div>
+    </div>
+    <div class="variant">
+      <div class="meta"><div class="eyebrow">D</div><h3>Breathing dot</h3><p>One dot with a soft halo. Slow breath on silence so it never looks dead, sharp swell on speech. The most discreet of the four.</p></div>
+      <div class="hud"><div class="top"><span class="state">listening</span><canvas class="wave" data-v="dot" width="128" height="28"></canvas><span></span></div><div class="body dim">…</div></div>
+    </div>
+  </section>
+
+  <h2>What they share</h2>
+  <div class="grid">
+    <div class="tile"><span class="k">signal</span>RMS over the last 100 ms of mic audio, the same number the app already computes for the speech gate. No FFT. Smoothed with fast attack and slower release; the responsiveness slider is that ratio.</div>
+    <div class="tile"><span class="k">size</span>64 × 14 pt, centred in the state row. Draws in the label's colour so it reads as part of the text, not a widget stuck on top.</div>
+    <div class="tile"><span class="k">not listening</span>In transcribing and cleaning there is no audio. Each variant has a quiet indeterminate motion for those states so the row still says "busy", then freezes on done.</div>
+    <div class="tile"><span class="k">cost</span>A 60 fps CALayer redraw of a 64 pt canvas is negligible. It stops when the HUD hides.</div>
+  </div>
+
+  <div class="tweak">
+    <div class="eyebrow">Tweak these</div>
+    <p>Reply with one of these and I'll build it into the HUD:</p>
+    <span class="say">build B strands</span>
+    <span class="say">build A bars</span>
+    <span class="say">build B, but sharper responsiveness</span>
+  </div>
+</main>
+
+<script>
+(() => {
+  // ---------- synthetic audio envelope (deterministic) ----------
+  const DUR = 12;
+  const REGIONS = [ // [start, end, kind]
+    [0, 1.1, 's'], [1.1, 4.0, 'v'], [4.0, 4.7, 's'], [4.7, 8.4, 'v'],
+    [8.4, 9.9, 's'], [9.9, 11.2, 'v'], [11.2, 12, 's'],
+  ];
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  // pre-bake envelope at 200 Hz
+  const RATE = 200, N = DUR * RATE, env = new Float32Array(N);
+  {
+    let syl = 0, sylLen = 0, sylAmp = 0;
+    for (let i = 0; i < N; i++) {
+      const t = i / RATE;
+      const r = REGIONS.find(x => t >= x[0] && t < x[1]);
+      if (!r || r[2] === 's') { env[i] = 0.02 + 0.015 * rnd(); continue; }
+      if (syl <= 0) { sylLen = 0.12 + rnd() * 0.2; syl = sylLen; sylAmp = 0.45 + rnd() * 0.55; }
+      const ph = 1 - syl / sylLen;
+      const shape = Math.sin(Math.PI * Math.min(1, ph * 1.25)) ** 0.8;
+      env[i] = 0.05 + sylAmp * shape * (0.85 + 0.3 * rnd());
+      syl -= 1 / RATE;
+    }
+  }
+  const envAt = t => env[Math.max(0, Math.min(N - 1, Math.floor((t % DUR) * RATE)))];
+
+  // ---------- transport state ----------
+  let playing = false, t = 0, last = performance.now(), speed = 1, resp = 0.55;
+  let hudState = 'listening';
+  let micLevel = null; // when non-null, overrides envelope
+
+  const $ = s => document.querySelector(s);
+  const playBtn = $('#play'), micBtn = $('#mic');
+  const setPlaying = p => { playing = p; playBtn.textContent = p ? 'Pause' : 'Play'; playBtn.setAttribute('aria-pressed', String(p)); last = performance.now(); };
+  playBtn.onclick = () => setPlaying(!playing);
+  $('#resp').oninput = e => { resp = +e.target.value; $('#respOut').value = resp.toFixed(2); };
+  $('#speed').oninput = e => { speed = +e.target.value; $('#speedOut').value = speed.toFixed(1) + '×'; };
+  document.querySelectorAll('[data-state]').forEach(b => b.onclick = () => {
+    hudState = b.dataset.state;
+    document.querySelectorAll('[data-state]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    document.querySelectorAll('.hud .state').forEach(s => s.textContent = hudState);
+    document.querySelectorAll('.hud .body').forEach(s => { s.textContent = hudState === 'listening' ? '…' : 'so the planreview upload should retry on any 500 three times then give up'; s.classList.toggle('dim', hudState === 'listening'); });
+  });
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
+    if (e.code === 'ArrowLeft') t = (t - 0.25 + DUR) % DUR;
+    if (e.code === 'ArrowRight') t = (t + 0.25) % DUR;
+  });
+
+  // mic
+  let audioCtx, analyser, micData;
+  micBtn.onclick = async () => {
+    if (micLevel !== null) { micLevel = null; micBtn.setAttribute('aria-pressed', 'false'); micBtn.textContent = 'Use my mic'; return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const src = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser(); analyser.fftSize = 1024;
+      micData = new Float32Array(analyser.fftSize);
+      src.connect(analyser);
+      micLevel = 0; micBtn.setAttribute('aria-pressed', 'true'); micBtn.textContent = 'Mic live · click to stop';
+    } catch (err) { micBtn.textContent = 'Mic blocked'; }
+  };
+  const readMic = () => {
+    analyser.getFloatTimeDomainData(micData);
+    let s = 0; for (let i = 0; i < micData.length; i++) s += micData[i] * micData[i];
+    const rms = Math.sqrt(s / micData.length);
+    return Math.min(1, rms * 9);
+  };
+
+  // ---------- timeline ----------
+  const tl = $('#timeline'), tctx = tl.getContext('2d');
+  const drawTimeline = () => {
+    const W = tl.width, H = tl.height, dpr = 1;
+    tctx.clearRect(0, 0, W, H);
+    for (const [a, b, k] of REGIONS) {
+      tctx.fillStyle = k === 'v' ? '#E6EAFF' : '#F3F5F7';
+      tctx.fillRect(a / DUR * W, 0, (b - a) / DUR * W, H);
+    }
+    // envelope
+    tctx.beginPath();
+    for (let x = 0; x < W; x++) {
+      const v = envAt(x / W * DUR);
+      const y = H - 8 - v * (H - 22);
+      x ? tctx.lineTo(x, y) : tctx.moveTo(x, y);
+    }
+    tctx.strokeStyle = '#2B4DFF'; tctx.lineWidth = 1.5; tctx.stroke();
+    // labels
+    tctx.font = '11px JetBrains Mono, monospace'; tctx.fillStyle = '#5E6672';
+    for (const [a, b, k] of REGIONS) {
+      const lbl = k === 'v' ? 'speech' : (b - a) < 0.9 ? 'breath' : 'silence';
+      tctx.fillText(lbl, a / DUR * W + 6, 14);
+    }
+    // playhead
+    const px = t / DUR * W;
+    tctx.fillStyle = '#171B22'; tctx.fillRect(px - 1, 0, 2, H);
+    if (micLevel !== null) { tctx.fillStyle = 'rgba(243,245,247,.75)'; tctx.fillRect(0, 0, W, H); tctx.fillStyle = '#171B22'; tctx.font = '600 13px IBM Plex Sans, sans-serif'; tctx.fillText('Driven by your microphone', 12, 26); }
+  };
+  let scrubbing = false;
+  const scrubTo = e => { const r = tl.getBoundingClientRect(); t = Math.max(0, Math.min(DUR - 0.001, (e.clientX - r.left) / r.width * DUR)); };
+  tl.addEventListener('pointerdown', e => { scrubbing = true; tl.setPointerCapture(e.pointerId); scrubTo(e); });
+  tl.addEventListener('pointermove', e => { if (scrubbing) scrubTo(e); });
+  tl.addEventListener('pointerup', () => scrubbing = false);
+
+  // ---------- variants ----------
+  const waves = [...document.querySelectorAll('canvas.wave')].map(c => ({ c, ctx: c.getContext('2d'), v: c.dataset.v, lvl: 0, hist: new Float32Array(64).fill(0), bars: new Float32Array(9).fill(0), phase: 0 }));
+  const INK = 'rgba(242,244,247,';
+
+  const smooth = (prev, target, dt) => {
+    // attack fast, release slow; resp slider shifts both
+    const attack = 12 + resp * 40, release = 3 + resp * 9;
+    const k = target > prev ? attack : release;
+    return prev + (target - prev) * Math.min(1, k * dt);
+  };
+
+  const idleMotion = (w, now) => {
+    // indeterminate: gentle travelling pulse for transcribing/cleaning
+    const speedIdle = hudState === 'cleaning' ? 1.6 : 1.0;
+    w.phase += speedIdle * 0.016;
+    return w.phase;
+  };
+
+  const draw = {
+    bars(w, lvl, now) {
+      const { ctx, c } = w; const W = c.width, H = c.height, n = 5, bw = 5, gap = 7;
+      const total = n * bw + (n - 1) * gap, x0 = (W - total) / 2;
+      const idle = hudState !== 'listening'; const ph = idle ? idleMotion(w, now) : 0;
+      for (let i = 0; i < n; i++) {
+        const centreness = 1 - Math.abs(i - 2) / 2; // 0..1
+        let target;
+        if (idle) target = 0.18 + 0.22 * (0.5 + 0.5 * Math.sin(ph * 4 - i * 0.9));
+        else target = Math.max(0.12, lvl * (0.55 + 0.45 * centreness) * (0.85 + 0.3 * Math.sin(now / 90 + i * 1.7)));
+        w.bars[i] = smooth(w.bars[i], target, 0.016);
+        const h = Math.max(bw, w.bars[i] * H);
+        const x = x0 + i * (bw + gap), y = (H - h) / 2;
+        ctx.fillStyle = INK + '.95)';
+        roundRect(ctx, x, y, bw, h, bw / 2); ctx.fill();
+      }
+    },
+    strands(w, lvl, now) {
+      const { ctx, c } = w; const W = c.width, H = c.height, n = 9, bw = 2.5, gap = 5;
+      const total = n * bw + (n - 1) * gap, x0 = (W - total) / 2, mid = H / 2;
+      const idle = hudState !== 'listening'; const ph = idle ? idleMotion(w, now) : 0;
+      for (let i = 0; i < n; i++) {
+        const centreness = 1 - Math.abs(i - 4) / 4;
+        let target;
+        if (idle) target = 0.06 + 0.3 * Math.max(0, Math.sin(ph * 5 - i * 0.7)) ** 2;
+        else target = lvl * (0.35 + 0.65 * centreness) * (0.8 + 0.4 * Math.abs(Math.sin(now / 70 + i * 2.1)));
+        w.bars[i] = smooth(w.bars[i], target, 0.016);
+        const h = Math.max(1.5, w.bars[i] * H);
+        const x = x0 + i * (bw + gap);
+        ctx.fillStyle = INK + (0.55 + 0.45 * centreness) + ')';
+        roundRect(ctx, x, mid - h / 2, bw, h, bw / 2); ctx.fill();
+      }
+    },
+    scope(w, lvl, now) {
+      const { ctx, c, hist } = w; const W = c.width, H = c.height, mid = H / 2;
+      const idle = hudState !== 'listening'; const ph = idle ? idleMotion(w, now) : 0;
+      hist.copyWithin(0, 1);
+      hist[hist.length - 1] = idle ? 0.25 * Math.sin(ph * 6) : lvl * Math.sin(now / 18) * (0.7 + 0.3 * Math.sin(now / 5));
+      ctx.beginPath();
+      const x0 = 14, span = W - 28;
+      for (let i = 0; i < hist.length; i++) {
+        const x = x0 + i / (hist.length - 1) * span, y = mid - hist[i] * (H / 2 - 2);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.strokeStyle = INK + '.9)'; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.stroke();
+    },
+    dot(w, lvl, now) {
+      const { ctx, c } = w; const W = c.width, H = c.height;
+      const idle = hudState !== 'listening'; const ph = idle ? idleMotion(w, now) : 0;
+      const breath = 0.5 + 0.5 * Math.sin(now / 900);
+      const target = idle ? 0.25 + 0.2 * (0.5 + 0.5 * Math.sin(ph * 3)) : Math.max(0.12 + 0.08 * breath, lvl);
+      w.lvl = smooth(w.lvl, target, 0.016);
+      const r = 3 + w.lvl * 5, halo = r + 2 + w.lvl * 9;
+      const g = ctx.createRadialGradient(W / 2, H / 2, r * 0.6, W / 2, H / 2, halo);
+      g.addColorStop(0, INK + '.35)'); g.addColorStop(1, INK + '0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(W / 2, H / 2, halo, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = INK + '.95)'; ctx.beginPath(); ctx.arc(W / 2, H / 2, r, 0, Math.PI * 2); ctx.fill();
+    },
+  };
+  function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+  // ---------- loop ----------
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let lvlSmooth = 0;
+  const frame = now => {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (playing && micLevel === null) t = (t + dt * speed) % DUR;
+    const raw = micLevel !== null ? readMic() : envAt(t);
+    lvlSmooth = smooth(lvlSmooth, raw, dt);
+    for (const w of waves) { w.ctx.clearRect(0, 0, w.c.width, w.c.height); draw[w.v](w, lvlSmooth, now); }
+    drawTimeline();
+    requestAnimationFrame(frame);
+  };
+  if (!reduced) setPlaying(true);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
