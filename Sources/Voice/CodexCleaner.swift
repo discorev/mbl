@@ -181,7 +181,8 @@ actor CodexCleaner: Cleaner {
         do {
             try await rpc.start(
                 executableURL: binary.url,
-                currentDirectoryURL: configDirectory
+                currentDirectoryURL: configDirectory,
+                environment: binary.environment
             )
             let notifications = await rpc.notifications()
             _ = try await rpc.request(
@@ -332,6 +333,9 @@ actor CodexCleaner: Cleaner {
     private func waitForTurn(turnID: String, token: UUID) async throws -> String {
         if let result = completedTurns.removeValue(forKey: turnID) {
             return try result.get()
+        }
+        guard sessionToken != nil else {
+            throw CodexCleanerError.serverDisconnected
         }
 
         return try await withTaskCancellationHandler {

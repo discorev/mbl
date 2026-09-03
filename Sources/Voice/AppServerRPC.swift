@@ -117,7 +117,11 @@ actor AppServerRPC {
         }
     }
 
-    func start(executableURL: URL, currentDirectoryURL: URL) throws {
+    func start(
+        executableURL: URL,
+        currentDirectoryURL: URL,
+        environment: [String: String]
+    ) throws {
         guard process == nil else {
             throw AppServerRPCError.alreadyRunning
         }
@@ -130,6 +134,7 @@ actor AppServerRPC {
         process.executableURL = executableURL
         process.arguments = ["app-server"]
         process.currentDirectoryURL = currentDirectoryURL
+        process.environment = environment
         process.standardInput = inputPipe
         process.standardOutput = outputPipe
         process.standardError = errorPipe
