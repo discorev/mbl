@@ -211,13 +211,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let description: String
 
         if isListening {
-            symbolName = "mic.fill"
+            symbolName = "waveform.circle.fill"
             description = "Voice listening"
         } else if modelStatus == .ready {
-            symbolName = "mic"
+            symbolName = "waveform"
             description = "Voice"
         } else {
-            symbolName = "mic.slash"
+            symbolName = "waveform.slash"
             description = modelStatus == .loading
                 ? "Voice loading speech model"
                 : "Voice speech model unavailable"
