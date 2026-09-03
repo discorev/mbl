@@ -4,6 +4,7 @@ import AppKit
 enum HUDState: String {
     case listening
     case transcribing
+    case cleaning
     case done
 }
 
@@ -60,8 +61,10 @@ final class HUD {
         panel.orderFrontRegardless()
     }
 
-    func update(state: HUDState, text: String) {
-        stateLabel.stringValue = state.rawValue
+    func update(state: HUDState, text: String, showsWarning: Bool = false) {
+        stateLabel.stringValue = showsWarning
+            ? "⚠︎ \(state.rawValue)"
+            : state.rawValue
         textView.string = text
         resizeForText(text)
         textView.scrollToEndOfDocument(nil)

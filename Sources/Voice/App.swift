@@ -24,38 +24,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private let transcriber = Transcriber()
+    private var cleaner: CodexCleaner?
     private var statusItem: NSStatusItem?
     private var hotkey: Hotkey?
     private var dictation: DictationController?
     private var modelLoadTask: Task<Void, Never>?
+    private var cleanerStartTask: Task<Void, Never>?
     private var selfTestTask: Task<Void, Never>?
+    private var cleanerTestTask: Task<Void, Never>?
     private var modelStatus = ModelStatus.loading
     private var isListening = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let selfTestPath = ProcessInfo.processInfo.environment["VOICE_SELFTEST"]
+        let environment = ProcessInfo.processInfo.environment
+        let selfTestPath = environment["VOICE_SELFTEST"]
             .flatMap { $0.isEmpty ? nil : $0 }
-        AppLog.startSession(truncate: selfTestPath == nil)
+        let cleanerTestText = environment["VOICE_CLEANTEST"]
+            .flatMap { $0.isEmpty ? nil : $0 }
+        AppLog.startSession(
+            truncate: selfTestPath == nil && cleanerTestText == nil
+        )
 
         if let selfTestPath {
             runSelfTest(path: selfTestPath)
             return
         }
+        if let cleanerTestText {
+            runCleanerTest(raw: cleanerTestText)
+            return
+        }
 
         let config = loadConfig()
-        configureDictation(config: config)
+        let cleaner = CodexCleaner(config: config)
+        self.cleaner = cleaner
+        configureDictation(config: config, cleaner: cleaner)
         configureStatusItem()
         configureHotkey()
         requestMicrophonePermission()
         requestAccessibilityPermission()
+        beginCleanerStartup(cleaner)
         beginModelLoading()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         modelLoadTask?.cancel()
+        cleanerStartTask?.cancel()
         selfTestTask?.cancel()
+        cleanerTestTask?.cancel()
         dictation?.shutdown()
         hotkey?.stop()
+        if let cleaner {
+            Task { await cleaner.shutdown() }
+        }
     }
 
     private func loadConfig() -> Config {
@@ -71,10 +91,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func configureDictation(config: Config) {
+    private func configureDictation(config: Config, cleaner: any Cleaner) {
         let controller = DictationController(
             recorder: Recorder(),
             transcriber: transcriber,
+            cleaner: cleaner,
             typist: Typist(),
             hud: HUD(bottomInset: CGFloat(config.hudBottomInset)),
             config: config,
@@ -117,6 +138,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in
                 AppLog.write(
                     "microphone permission outcome: \(granted ? "granted" : "denied")"
+                )
+            }
+        }
+    }
+
+    private func beginCleanerStartup(_ cleaner: CodexCleaner) {
+        cleanerStartTask = Task { @MainActor in
+            do {
+                try await cleaner.start()
+            } catch {
+                guard !Task.isCancelled else { return }
+                AppLog.write(
+                    "cleanup unavailable: \(error.localizedDescription) "
+                        + "Raw transcripts will be typed."
                 )
             }
         }
@@ -246,6 +281,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 AppLog.write("self-test failed: \(error.localizedDescription)")
             }
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private func runCleanerTest(raw: String) {
+        let config = loadConfig()
+        let cleaner = CodexCleaner(config: config)
+        self.cleaner = cleaner
+        cleanerTestTask = Task { @MainActor in
+            AppLog.write("cleaner-test input: \(raw)")
+            do {
+                try await cleaner.start()
+                let started = Date()
+                let cleaned = try await cleaner.clean(raw)
+                AppLog.write(
+                    "cleaner-test output: \(cleaned)"
+                )
+                AppLog.write(
+                    "cleaner-test duration=\(formatSeconds(Date().timeIntervalSince(started)))s"
+                )
+            } catch {
+                AppLog.write(
+                    "cleaner-test failed: \(error.localizedDescription)"
+                )
+                AppLog.write("cleaner-test raw fallback: \(raw)")
+            }
+            await cleaner.shutdown()
             NSApplication.shared.terminate(nil)
         }
     }

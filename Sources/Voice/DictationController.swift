@@ -4,6 +4,7 @@ import Foundation
 final class DictationController {
     private let recorder: Recorder
     private let transcriber: Transcriber
+    private let cleaner: any Cleaner
     private let typist: Typist
     private let hud: HUD
     private let onListeningChanged: (Bool) -> Void
@@ -24,6 +25,7 @@ final class DictationController {
     init(
         recorder: Recorder,
         transcriber: Transcriber,
+        cleaner: any Cleaner,
         typist: Typist,
         hud: HUD,
         config: Config,
@@ -31,6 +33,7 @@ final class DictationController {
     ) {
         self.recorder = recorder
         self.transcriber = transcriber
+        self.cleaner = cleaner
         self.typist = typist
         self.hud = hud
         self.config = config
@@ -189,8 +192,45 @@ final class DictationController {
             guard !Task.isCancelled, utteranceID == sessionID else {
                 return
             }
-            hud.update(state: .done, text: text)
-            handleDelivery(typist.deliver(text))
+
+            let wordCount = text.split(whereSeparator: \.isWhitespace).count
+            guard
+                config.backend == "codex",
+                wordCount >= config.minWordsForCleanup
+            else {
+                hud.update(state: .done, text: text)
+                handleDelivery(typist.deliver(text), transcriptKind: "raw")
+                return
+            }
+
+            hud.update(state: .cleaning, text: text)
+            let cleanupStarted = Date()
+            do {
+                let cleaned = try await cleaner.clean(text)
+                let cleanupDuration = Date().timeIntervalSince(cleanupStarted)
+                AppLog.write(
+                    "cleanup: duration=\(formatSeconds(cleanupDuration))s"
+                )
+                guard !Task.isCancelled, utteranceID == sessionID else {
+                    return
+                }
+                hud.update(state: .done, text: cleaned)
+                handleDelivery(
+                    typist.deliver(cleaned),
+                    transcriptKind: "cleaned"
+                )
+            } catch {
+                guard !Task.isCancelled, utteranceID == sessionID else {
+                    return
+                }
+                AppLog.write(
+                    "cleanup failed after "
+                        + formatSeconds(Date().timeIntervalSince(cleanupStarted))
+                        + "s: \(error.localizedDescription); typing raw transcript"
+                )
+                hud.update(state: .done, text: text, showsWarning: true)
+                handleDelivery(typist.deliver(text), transcriptKind: "raw")
+            }
         } catch {
             guard !Task.isCancelled, utteranceID == sessionID else {
                 return
@@ -205,13 +245,16 @@ final class DictationController {
         }
     }
 
-    private func handleDelivery(_ delivery: TypeDelivery) {
+    private func handleDelivery(
+        _ delivery: TypeDelivery,
+        transcriptKind: String
+    ) {
         switch delivery {
         case .nothing:
             AppLog.write("empty transcript; nothing typed")
             hud.update(state: .done, text: "No speech detected")
         case .typed:
-            AppLog.write("raw transcript typed")
+            AppLog.write("\(transcriptKind) transcript typed")
         case .accessibilityRequired:
             hud.update(state: .done, text: "Grant Accessibility to type")
         case .eventUnavailable:

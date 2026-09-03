@@ -26,13 +26,18 @@ struct Config: Codable, Sendable {
     )
 
     static var directoryURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
+        if let override = ProcessInfo.processInfo.environment["VOICE_CONFIG_DIR"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+                .standardizedFileURL
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".config/voice", isDirectory: true)
     }
 
     static func load(fileManager: FileManager = .default) throws -> Config {
-        let directory = fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/voice", isDirectory: true)
+        let directory = directoryURL
         try fileManager.createDirectory(
             at: directory,
             withIntermediateDirectories: true
@@ -44,6 +49,7 @@ struct Config: Codable, Sendable {
 
         try writeIfMissing(defaultConfigJSON, to: configURL, fileManager: fileManager)
         try writeIfMissing(defaultPrompt, to: promptURL, fileManager: fileManager)
+        try updateOldDefaultPrompt(at: promptURL)
         try writeIfMissing("", to: vocabularyURL, fileManager: fileManager)
 
         let data = try Data(contentsOf: configURL)
@@ -59,6 +65,12 @@ struct Config: Codable, Sendable {
             return
         }
         try Data(contents.utf8).write(to: url, options: .atomic)
+    }
+
+    private static func updateOldDefaultPrompt(at url: URL) throws {
+        let existing = try String(contentsOf: url, encoding: .utf8)
+        guard existing == oldDefaultPrompt else { return }
+        try Data(defaultPrompt.utf8).write(to: url, options: .atomic)
     }
 
     private static let defaultConfigJSON = """
@@ -77,10 +89,25 @@ struct Config: Codable, Sendable {
 
     """
 
-    private static let defaultPrompt = """
+    private static let oldDefaultPrompt = """
     You are a dictation cleaner. Clean the user's raw dictated speech for insertion at the cursor.
 
     Remove filler words, false starts, repeated words, and self-corrections. When the speaker corrects something, keep only the last version. Keep the speaker's wording, meaning, and tone. Fix punctuation and casing. Do not expand, answer, summarize, explain, or add anything. Output only the cleaned text.
+
+    """
+
+    private static let defaultPrompt = """
+    You are a dictation cleaner. The user dictates text to be inserted at their cursor; you receive the raw speech-to-text output and return the cleaned text.
+
+    Rules:
+    - Remove filler words (um, er, like, you know), false starts, stutters and repeated words.
+    - When the speaker corrects themselves ("no wait", "actually", "I mean"), keep only the final version.
+    - Keep the speaker's wording, meaning and tone. Do not summarise, expand, rephrase for style, or add anything.
+    - Fix punctuation, casing and sentence boundaries.
+    - Use British English spelling (recognise, colour, organisation).
+    - Spoken punctuation and formatting commands are instructions, not text: "full stop", "comma", "new line", "new paragraph", "open quote" etc.
+    - If the input is already clean, return it unchanged.
+    - Output only the cleaned text. No preamble, no quotes, no explanation.
 
     """
 }
