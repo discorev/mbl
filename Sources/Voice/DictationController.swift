@@ -4,7 +4,7 @@ import Foundation
 final class DictationController {
     private let recorder: Recorder
     private let transcriber: Transcriber
-    private let paster: Paster
+    private let typist: Typist
     private let hud: HUD
     private let onListeningChanged: (Bool) -> Void
 
@@ -24,14 +24,14 @@ final class DictationController {
     init(
         recorder: Recorder,
         transcriber: Transcriber,
-        paster: Paster,
+        typist: Typist,
         hud: HUD,
         config: Config,
         onListeningChanged: @escaping (Bool) -> Void
     ) {
         self.recorder = recorder
         self.transcriber = transcriber
-        self.paster = paster
+        self.typist = typist
         self.hud = hud
         self.config = config
         self.onListeningChanged = onListeningChanged
@@ -159,7 +159,6 @@ final class DictationController {
         previewTask?.cancel()
         finalTask?.cancel()
         recorder.cancel()
-        paster.restorePendingClipboard()
     }
 
     private func reloadConfig() {
@@ -191,7 +190,7 @@ final class DictationController {
                 return
             }
             hud.update(state: .done, text: text)
-            handleDelivery(paster.deliver(text))
+            handleDelivery(typist.deliver(text))
         } catch {
             guard !Task.isCancelled, utteranceID == sessionID else {
                 return
@@ -206,19 +205,17 @@ final class DictationController {
         }
     }
 
-    private func handleDelivery(_ delivery: PasteDelivery) {
+    private func handleDelivery(_ delivery: TypeDelivery) {
         switch delivery {
         case .nothing:
-            AppLog.write("empty transcript; nothing pasted")
+            AppLog.write("empty transcript; nothing typed")
             hud.update(state: .done, text: "No speech detected")
-        case .pasted:
-            AppLog.write("raw transcript pasted")
-        case .copiedAccessibilityRequired:
-            hud.update(state: .done, text: "copied — grant Accessibility to paste")
-        case .copiedEventUnavailable:
-            hud.update(state: .done, text: "copied — paste unavailable")
-        case .clipboardUnavailable:
-            hud.update(state: .done, text: "Could not copy transcript")
+        case .typed:
+            AppLog.write("raw transcript typed")
+        case .accessibilityRequired:
+            hud.update(state: .done, text: "Grant Accessibility to type")
+        case .eventUnavailable:
+            hud.update(state: .done, text: "Could not type transcript")
         }
         hud.dismissAfterPaste()
     }

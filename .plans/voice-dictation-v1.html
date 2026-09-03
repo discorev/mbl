@@ -136,7 +136,7 @@
     <div><div class="k">1 · capture</div><div class="v">Hold ⌥ right</div><div class="s">AVAudioEngine, 16 kHz mono float</div></div>
     <div class="local"><div class="k">2 · transcribe</div><div class="v">Parakeet v2</div><div class="s">live preview in the HUD every ~0.5 s while held</div><div class="t">~0.3 s</div></div>
     <div class="sub"><div class="k">3 · clean</div><div class="v">turn/start</div><div class="s">warm Codex thread, your prompt</div><div class="t">~1–2 s</div></div>
-    <div><div class="k">4 · deliver</div><div class="v">Paste</div><div class="s">clipboard swap, ⌘V, restore</div></div>
+    <div><div class="k">4 · deliver</div><div class="v">Type</div><div class="s">unicode key events, clipboard untouched</div></div>
     <div><div class="k">5 · remember</div><div class="v">History</div><div class="s">raw + clean, JSONL, for prompt tuning</div></div>
   </div>
 
@@ -210,14 +210,14 @@
 
   <div class="decision">
     <header><h3>Delivering the text</h3></header>
-    <div class="why">Both need the Accessibility permission. Paste is what every dictation app does; typing is what feels most native but breaks in some apps.</div>
+    <div class="why">Needs the Accessibility permission either way. Typing leaves the clipboard alone, which matters more than raw speed for a tool you use all day.</div>
     <div class="opts">
-      <div class="opt pick"><span class="tag">pick</span><strong>Clipboard swap + synthetic ⌘V</strong>
-        <ul><li>Save pasteboard, write text, post ⌘V via CGEvent, restore pasteboard after 300 ms</li><li>Works in terminals, browsers, Slack, editors</li><li>Fallback: leave it on the clipboard and show a HUD if the paste event is refused</li></ul>
-        <div class="say">keep paste delivery</div></div>
-      <div class="opt alt"><span class="tag">alternative</span><strong>Type it with CGEvent unicode</strong>
-        <ul><li>No clipboard side effects</li><li>Slow for long text, and some Electron apps drop characters</li></ul>
-        <div class="say">type instead of paste</div></div>
+      <div class="opt pick"><span class="tag">pick</span><strong>Type it with CGEvent unicode</strong>
+        <ul><li>Posts keyboard events carrying the text in 20-unit chunks, newlines as Return</li><li>Clipboard is never touched</li><li>If Accessibility is missing, the HUD says so and nothing is delivered</li></ul>
+        <div class="say">keep typed delivery</div></div>
+      <div class="opt alt"><span class="tag">alternative</span><strong>Clipboard swap + synthetic ⌘V</strong>
+        <ul><li>Faster for long text, but overwrites the clipboard even with a restore</li><li>Rejected: clobbering the clipboard would annoy fast</li></ul>
+        <div class="say">paste instead of type</div></div>
     </div>
   </div>
 
@@ -255,7 +255,7 @@
     CodexCleaner.swift        spawns codex app-server, JSON-RPC over stdio, thread lifecycle
     AppServerRPC.swift        line-delimited JSON framing, request ids, notification routing
     ClaudeCleaner.swift       (M3) Process("claude", ["-p", ...]) fallback
-    Paster.swift              NSPasteboard swap + CGEvent ⌘V + restore
+    Typist.swift              CGEvent unicode key events, clipboard untouched
     Config.swift              ~/.config/voice/{config.json,prompt.md,vocab.txt}
     History.swift             append JSONL line per utterance
     HUD.swift                 non-activating NSPanel, live text, drag
@@ -286,7 +286,7 @@
       <li class="y">Re-running v2 on a 20 s buffer stays under the 500 ms preview tick on M3; if not, flip to EOU streaming</li>
       <li class="y">HUD panel takes no keyboard focus and never steals the cursor from the target app</li>
       <li class="y"><code>codex app-server</code> on stdio accepts <code>initialize</code> and answers a <code>turn/start</code> on a tool-free, read-only thread</li>
-      <li class="n">Not doing: live paste into the document, multi-language, a settings UI, Whisper fallback</li>
+      <li class="n">Not doing: live typing into the document, multi-language, a settings UI, Whisper fallback</li>
     </ul>
     <h3>Timeouts and failure</h3>
     <p>If the cleaner exceeds its timeout or exits non-zero, paste the raw transcript and note it in history. Dictation should never silently swallow what you said.</p>

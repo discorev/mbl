@@ -73,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = DictationController(
             recorder: Recorder(),
             transcriber: transcriber,
-            paster: Paster(),
+            typist: Typist(),
             hud: HUD(bottomInset: CGFloat(config.hudBottomInset)),
             config: config,
             onListeningChanged: { [weak self] listening in
