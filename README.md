@@ -74,6 +74,7 @@ mbl creates `~/.config/voice/config.json` on first launch. Changes to this file 
 | `previewTickMs` | `500` | Live preview interval in milliseconds. |
 | `hudBottomInset` | `80` | Default HUD distance from the bottom of the display. |
 | `minInputVolume` | `0.5` | Input level below which the HUD warns you. |
+| `autoDownloadUpdates` | `false` | Download updates as soon as they are found; installing still needs a click. |
 
 Cleanup prompts live in `~/.config/voice/prompts/<model>.md`. The supplied files are `5-6-luna.md` and `macos-26.md`. You can edit them while mbl is running; the changes apply without a restart.
 

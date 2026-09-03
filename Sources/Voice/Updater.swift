@@ -18,6 +18,9 @@ final class Updater {
 
     private(set) var state: State = .idle
     var onStateChange: ((State) -> Void)?
+    var autoDownload = false {
+        didSet { driver.autoDownload = autoDownload }
+    }
 
     static func makeIfAvailable() -> Updater? {
         guard let feedURL = Bundle.main.object(
@@ -74,6 +77,7 @@ final class Updater {
 @MainActor
 private final class MenuUserDriver: NSObject, SPUUserDriver {
     var onStateChange: ((Updater.State) -> Void)?
+    var autoDownload = false
 
     private var state: Updater.State = .idle
     private var pendingChoice: CheckedContinuation<SPUUserUpdateChoice, Never>?
@@ -102,6 +106,10 @@ private final class MenuUserDriver: NSObject, SPUUserDriver {
 
         switch state.stage {
         case .notDownloaded:
+            if autoDownload {
+                setState(.downloading)
+                return .install
+            }
             setState(.available(version: appcastItem.displayVersionString))
         case .downloaded, .installing:
             setState(.ready)

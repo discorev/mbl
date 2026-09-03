@@ -26,6 +26,7 @@ struct Config: Codable, Equatable, Sendable {
     let previewTickMs: Int
     let hudBottomInset: Int
     let minInputVolume: Float
+    let autoDownloadUpdates: Bool
 
     static let fallbackValue = Config(
         hotkey: .rightOption,
@@ -37,7 +38,8 @@ struct Config: Codable, Equatable, Sendable {
         cleanupTimeoutSeconds: 6,
         previewTickMs: 500,
         hudBottomInset: 80,
-        minInputVolume: 0.5
+        minInputVolume: 0.5,
+        autoDownloadUpdates: false
     )
 
     static var directoryURL: URL {
@@ -84,7 +86,8 @@ struct Config: Codable, Equatable, Sendable {
         cleanupTimeoutSeconds: Int,
         previewTickMs: Int,
         hudBottomInset: Int,
-        minInputVolume: Float
+        minInputVolume: Float,
+        autoDownloadUpdates: Bool = false
     ) {
         self.hotkey = hotkey
         self.backend = backend
@@ -96,6 +99,7 @@ struct Config: Codable, Equatable, Sendable {
         self.previewTickMs = previewTickMs
         self.hudBottomInset = hudBottomInset
         self.minInputVolume = minInputVolume
+        self.autoDownloadUpdates = autoDownloadUpdates
     }
 
     init(from decoder: any Decoder) throws {
@@ -112,6 +116,10 @@ struct Config: Codable, Equatable, Sendable {
             Float.self,
             forKey: .minInputVolume
         ) ?? 0.5
+        autoDownloadUpdates = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .autoDownloadUpdates
+        ) ?? false
 
         if let value = try? container.decode(CleanupFallback.self, forKey: .fallback) {
             fallback = value
@@ -144,7 +152,8 @@ struct Config: Codable, Equatable, Sendable {
       "cleanupTimeoutSeconds": 6,
       "previewTickMs": 500,
       "hudBottomInset": 80,
-      "minInputVolume": 0.5
+      "minInputVolume": 0.5,
+      "autoDownloadUpdates": false
     }
 
     """

@@ -72,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.cleaner = cleaner
         configureDictation(config: config, cleaner: cleaner)
         configureStatusItem()
-        configureUpdater()
+        configureUpdater(config: config)
         configureHotkey(config: config)
         requestMicrophonePermission()
         requestAccessibilityPermission()
@@ -162,6 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        updater?.autoDownload = config.autoDownloadUpdates
         self.currentConfig = config
         AppLog.write("config reloaded")
     }
@@ -192,12 +193,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateStatusIcon()
     }
 
-    private func configureUpdater() {
+    private func configureUpdater(config: Config) {
         guard let updater = Updater.makeIfAvailable() else {
             return
         }
 
         self.updater = updater
+        updater.autoDownload = config.autoDownloadUpdates
         updateState = updater.state
         updater.onStateChange = { [weak self] state in
             guard let self else { return }
