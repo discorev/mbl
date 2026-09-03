@@ -73,11 +73,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setListening(_ listening: Bool) {
         let symbolName = listening ? "mic.fill" : "mic"
-        statusItem?.button?.image = NSImage(
+        let image = NSImage(
             systemSymbolName: symbolName,
             accessibilityDescription: listening ? "Voice listening" : "Voice"
         )
-        statusItem?.button?.contentTintColor = listening ? .systemRed : nil
+        if listening {
+            image?.isTemplate = false
+            statusItem?.button?.image = image?.withSymbolConfiguration(
+                .init(paletteColors: [.systemRed])
+            )
+        } else {
+            statusItem?.button?.image = image
+        }
     }
 
     @objc
