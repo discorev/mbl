@@ -71,6 +71,7 @@ final class DictationController {
         do {
             try recorder.start()
             isRecording = true
+            checkInputVolume()
             startPreviewTimer()
             startLevelTimer()
         } catch {
@@ -297,6 +298,28 @@ final class DictationController {
             hud.update(state: .done, text: "Could not type transcript")
         }
         hud.dismissAfterPaste()
+    }
+
+    private func checkInputVolume() {
+        guard let volume = InputDevice.inputVolume() else {
+            AppLog.write("input volume: unavailable")
+            return
+        }
+
+        AppLog.write("input volume: \(String(format: "%.2f", volume))")
+        guard volume < config.minInputVolume else {
+            return
+        }
+
+        let percentage = Int((volume * 100).rounded())
+        AppLog.write(
+            "warning: input volume \(String(format: "%.2f", volume)) is below "
+                + "minimum \(String(format: "%.2f", config.minInputVolume))"
+        )
+        hud.update(
+            state: .listening,
+            text: "Mic input is at \(percentage)% — raise it in System Settings › Sound"
+        )
     }
 
     private func startPreviewTimer() {

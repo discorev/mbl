@@ -370,6 +370,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func runAuroraTest() {
         let hud = HUD(bottomInset: CGFloat(Config.fallbackValue.hudBottomInset))
         auroraTestTask = Task { @MainActor in
+            if let volume = InputDevice.inputVolume() {
+                AppLog.write("input volume: \(String(format: "%.2f", volume))")
+            } else {
+                AppLog.write("input volume: unavailable")
+            }
             AppLog.write("aurora-test state: listening")
             hud.show(state: .listening, text: "Aurora test")
 

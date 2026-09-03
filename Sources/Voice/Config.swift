@@ -20,6 +20,7 @@ struct Config: Codable, Sendable {
     let cleanupTimeoutSeconds: Int
     let previewTickMs: Int
     let hudBottomInset: Int
+    let minInputVolume: Float
 
     static let fallbackValue = Config(
         hotkey: "rightOption",
@@ -30,7 +31,8 @@ struct Config: Codable, Sendable {
         minWordsForCleanup: 4,
         cleanupTimeoutSeconds: 6,
         previewTickMs: 500,
-        hudBottomInset: 80
+        hudBottomInset: 80,
+        minInputVolume: 0.5
     )
 
     static var directoryURL: URL {
@@ -76,7 +78,8 @@ struct Config: Codable, Sendable {
         minWordsForCleanup: Int,
         cleanupTimeoutSeconds: Int,
         previewTickMs: Int,
-        hudBottomInset: Int
+        hudBottomInset: Int,
+        minInputVolume: Float
     ) {
         self.hotkey = hotkey
         self.backend = backend
@@ -87,6 +90,7 @@ struct Config: Codable, Sendable {
         self.cleanupTimeoutSeconds = cleanupTimeoutSeconds
         self.previewTickMs = previewTickMs
         self.hudBottomInset = hudBottomInset
+        self.minInputVolume = minInputVolume
     }
 
     init(from decoder: any Decoder) throws {
@@ -99,6 +103,10 @@ struct Config: Codable, Sendable {
         cleanupTimeoutSeconds = try container.decode(Int.self, forKey: .cleanupTimeoutSeconds)
         previewTickMs = try container.decode(Int.self, forKey: .previewTickMs)
         hudBottomInset = try container.decode(Int.self, forKey: .hudBottomInset)
+        minInputVolume = try container.decodeIfPresent(
+            Float.self,
+            forKey: .minInputVolume
+        ) ?? 0.5
 
         if let value = try? container.decode(CleanupFallback.self, forKey: .fallback) {
             fallback = value
@@ -130,7 +138,8 @@ struct Config: Codable, Sendable {
       "minWordsForCleanup": 4,
       "cleanupTimeoutSeconds": 6,
       "previewTickMs": 500,
-      "hudBottomInset": 80
+      "hudBottomInset": 80,
+      "minInputVolume": 0.5
     }
 
     """
