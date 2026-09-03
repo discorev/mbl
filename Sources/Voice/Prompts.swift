@@ -1,6 +1,17 @@
 import Foundation
 
 enum Prompts {
+    struct Instructions: Sendable {
+        let text: String
+        let vocabularyCount: Int
+        let modificationDates: ModificationDates
+    }
+
+    struct ModificationDates: Equatable, Sendable {
+        let prompt: Date?
+        let vocabulary: Date?
+    }
+
     struct LocalLocation: Sendable {
         let url: URL
         let requestedKey: String
@@ -17,6 +28,55 @@ enum Prompts {
     static func codexURL(for model: String, directoryURL: URL) -> URL {
         promptDirectoryURL(in: directoryURL)
             .appendingPathComponent("\(codexKey(for: model)).md")
+    }
+
+    static func instructions(
+        at promptURL: URL,
+        directoryURL: URL,
+        fileManager: FileManager = .default
+    ) throws -> Instructions {
+        let prompt = try String(contentsOf: promptURL, encoding: .utf8)
+        let vocabularyURL = vocabularyURL(in: directoryURL)
+        let terms: [String]
+        if fileManager.fileExists(atPath: vocabularyURL.path) {
+            terms = try String(contentsOf: vocabularyURL, encoding: .utf8)
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+        } else {
+            terms = []
+        }
+
+        let vocabulary = terms.isEmpty
+            ? ""
+            : "\n\nVocabulary\n"
+                + "These are names and terms the speaker uses. Keep them spelled exactly "
+                + "like this when they appear, even if the transcript spells them differently:\n"
+                + terms.map { "- \($0)" }.joined(separator: "\n")
+                + "\n"
+        return Instructions(
+            text: prompt + vocabulary,
+            vocabularyCount: terms.count,
+            modificationDates: modificationDates(
+                promptURL: promptURL,
+                directoryURL: directoryURL,
+                fileManager: fileManager
+            )
+        )
+    }
+
+    static func modificationDates(
+        promptURL: URL,
+        directoryURL: URL,
+        fileManager: FileManager = .default
+    ) -> ModificationDates {
+        ModificationDates(
+            prompt: modificationDate(of: promptURL, fileManager: fileManager),
+            vocabulary: modificationDate(
+                of: vocabularyURL(in: directoryURL),
+                fileManager: fileManager
+            )
+        )
     }
 
     static func localLocation(
@@ -106,6 +166,17 @@ enum Prompts {
 
     private static func promptDirectoryURL(in directoryURL: URL) -> URL {
         directoryURL.appendingPathComponent("prompts", isDirectory: true)
+    }
+
+    private static func vocabularyURL(in directoryURL: URL) -> URL {
+        directoryURL.appendingPathComponent("vocab.txt")
+    }
+
+    private static func modificationDate(
+        of url: URL,
+        fileManager: FileManager
+    ) -> Date? {
+        try? fileManager.attributesOfItem(atPath: url.path)[.modificationDate] as? Date
     }
 
     private static func writeIfMissing(

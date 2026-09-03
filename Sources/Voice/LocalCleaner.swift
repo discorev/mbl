@@ -45,8 +45,14 @@ struct LocalCleaner: Cleaner {
                     + "using=prompts/\(location.selectedKey).md"
             )
         }
-        let instructions = try String(contentsOf: location.url, encoding: .utf8)
-        let session = LanguageModelSession(instructions: instructions)
+        let instructions = try Prompts.instructions(
+            at: location.url,
+            directoryURL: configDirectory
+        )
+        if instructions.vocabularyCount > 0 {
+            await AppLog.write("vocab: \(instructions.vocabularyCount) terms")
+        }
+        let session = LanguageModelSession(instructions: instructions.text)
         let response = try await session.respond(
             to: raw,
             options: GenerationOptions(temperature: 0)

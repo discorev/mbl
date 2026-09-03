@@ -5,12 +5,12 @@ actor CodexCleaner: Cleaner {
         let rpc: AppServerRPC
         let notifications: AsyncStream<AppServerNotification>
         let threadID: String
-        let promptModificationDate: Date?
+        let instructionModificationDates: Prompts.ModificationDates
     }
 
     private struct StartedThread: Sendable {
         let id: String
-        let promptModificationDate: Date?
+        let instructionModificationDates: Prompts.ModificationDates
     }
 
     private struct TurnWaiter {
@@ -24,7 +24,7 @@ actor CodexCleaner: Cleaner {
 
     private var rpc: AppServerRPC?
     private var threadID: String?
-    private var promptModificationDate: Date?
+    private var instructionModificationDates: Prompts.ModificationDates?
     private var turnCount = 0
     private var startup: (token: UUID, task: Task<StartedServer, Error>)?
     private var notificationTask: Task<Void, Never>?
@@ -212,7 +212,7 @@ actor CodexCleaner: Cleaner {
                 rpc: rpc,
                 notifications: notifications,
                 threadID: thread.id,
-                promptModificationDate: thread.promptModificationDate
+                instructionModificationDates: thread.instructionModificationDates
             )
         } catch {
             await rpc.stop()
@@ -229,10 +229,13 @@ actor CodexCleaner: Cleaner {
             for: config.codexModel,
             directoryURL: configDirectory
         )
-        let prompt = try String(contentsOf: promptURL, encoding: .utf8)
-        let modificationDate = try promptURL.resourceValues(
-            forKeys: [.contentModificationDateKey]
-        ).contentModificationDate
+        let instructions = try Prompts.instructions(
+            at: promptURL,
+            directoryURL: configDirectory
+        )
+        if instructions.vocabularyCount > 0 {
+            await AppLog.write("vocab: \(instructions.vocabularyCount) terms")
+        }
 
         let response = try await rpc.request(
             method: "thread/start",
@@ -243,7 +246,7 @@ actor CodexCleaner: Cleaner {
                 "sandbox": .string("read-only"),
                 "ephemeral": .bool(true),
                 "dynamicTools": .array([]),
-                "developerInstructions": .string(prompt),
+                "developerInstructions": .string(instructions.text),
             ])
         )
         guard
@@ -255,7 +258,7 @@ actor CodexCleaner: Cleaner {
         }
         return StartedThread(
             id: threadID,
-            promptModificationDate: modificationDate
+            instructionModificationDates: instructions.modificationDates
         )
     }
 
@@ -263,7 +266,7 @@ actor CodexCleaner: Cleaner {
         let token = UUID()
         rpc = started.rpc
         threadID = started.threadID
-        promptModificationDate = started.promptModificationDate
+        instructionModificationDates = started.instructionModificationDates
         turnCount = 0
         sessionToken = token
         notificationTask?.cancel()
@@ -291,14 +294,15 @@ actor CodexCleaner: Cleaner {
             for: config.codexModel,
             directoryURL: configDirectory
         )
-        let currentModificationDate = try promptURL.resourceValues(
-            forKeys: [.contentModificationDateKey]
-        ).contentModificationDate
+        let currentModificationDates = Prompts.modificationDates(
+            promptURL: promptURL,
+            directoryURL: configDirectory
+        )
         let reachedTurnLimit = turnCount >= max(config.codexThreadMaxTurns, 1)
-        let promptChanged = currentModificationDate != promptModificationDate
-        guard reachedTurnLimit || promptChanged else { return }
+        let instructionsChanged = currentModificationDates != instructionModificationDates
+        guard reachedTurnLimit || instructionsChanged else { return }
 
-        let reason = reachedTurnLimit ? "turn limit" : "prompt changed"
+        let reason = reachedTurnLimit ? "turn limit" : "prompt or vocabulary changed"
         await AppLog.write("cleanup thread rotating: \(reason)")
         let thread = try await Self.startThread(
             rpc: rpc,
@@ -306,7 +310,7 @@ actor CodexCleaner: Cleaner {
             configDirectory: configDirectory
         )
         threadID = thread.id
-        promptModificationDate = thread.promptModificationDate
+        instructionModificationDates = thread.instructionModificationDates
         turnCount = 0
     }
 
@@ -473,7 +477,7 @@ actor CodexCleaner: Cleaner {
         let activeRPC = rpc
         rpc = nil
         threadID = nil
-        promptModificationDate = nil
+        instructionModificationDates = nil
         sessionToken = nil
         turnCount = 0
         return activeRPC
