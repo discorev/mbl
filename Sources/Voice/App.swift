@@ -132,7 +132,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hotkey = Hotkey(
             onHold: { [weak self] in self?.dictation?.hold() },
             onRelease: { [weak self] in self?.dictation?.release() },
-            onCancel: { [weak self] in self?.dictation?.cancel() }
+            onCancel: { [weak self] in self?.dictation?.cancel() },
+            onUserKeyDown: { [weak self] in self?.dictation?.userDidType() }
         )
         hotkey.start()
         self.hotkey = hotkey

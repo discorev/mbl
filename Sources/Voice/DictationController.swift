@@ -166,6 +166,10 @@ final class DictationController {
         hud.resetPosition()
     }
 
+    func userDidType() {
+        typist.userDidType()
+    }
+
     func prewarmRecorder() {
         recorder.prewarm()
     }

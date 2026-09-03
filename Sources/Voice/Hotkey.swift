@@ -10,6 +10,7 @@ final class Hotkey {
     private let onHold: () -> Void
     private let onRelease: () -> Void
     private let onCancel: () -> Void
+    private let onUserKeyDown: () -> Void
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -18,11 +19,13 @@ final class Hotkey {
     init(
         onHold: @escaping () -> Void,
         onRelease: @escaping () -> Void,
-        onCancel: @escaping () -> Void
+        onCancel: @escaping () -> Void,
+        onUserKeyDown: @escaping () -> Void = {}
     ) {
         self.onHold = onHold
         self.onRelease = onRelease
         self.onCancel = onCancel
+        self.onUserKeyDown = onUserKeyDown
     }
 
     func start() {
@@ -84,6 +87,11 @@ final class Hotkey {
         if type == .keyDown, keyCode == escapeKeyCode, isHeld {
             isHeld = false
             onCancel()
+            return
+        }
+
+        if type == .keyDown, !isHeld {
+            onUserKeyDown()
         }
     }
 }

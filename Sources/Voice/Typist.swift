@@ -10,6 +10,14 @@ final class Typist {
 
     private var lastTypedAt: Date?
     private var lastTypedEndedWithSpace = true
+    private var isTyping = false
+
+    /// Called for any real key press from the user; a keystroke after a
+    /// dictation means the cursor has moved on, so drop the spacing memory.
+    func userDidType() {
+        guard !isTyping else { return }
+        lastTypedAt = nil
+    }
 
     func deliver(_ text: String) -> TypeDelivery {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -30,6 +38,8 @@ final class Typist {
             return .eventUnavailable
         }
 
+        isTyping = true
+        defer { isTyping = false }
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         for (index, line) in lines.enumerated() {
             for chunk in Array(String(line).utf16).chunked(into: Self.chunkSize) {
