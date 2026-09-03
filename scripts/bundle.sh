@@ -53,7 +53,7 @@ SPARKLE_FRAMEWORK="$CONTENTS/Frameworks/Sparkle.framework"
 
 rm -rf "$APP"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" "$CONTENTS/Frameworks"
-cp "$BIN_DIR/Voice" "$CONTENTS/MacOS/Voice"
+cp "$BIN_DIR/Voice" "$CONTENTS/MacOS/mbl"
 cp -R "$BIN_DIR/Sparkle.framework" "$CONTENTS/Frameworks/"
 cp "$ROOT/assets/icon/Voice.icns" "$CONTENTS/Resources/Voice.icns"
 cp "$ROOT/assets/icon/Assets.car" "$CONTENTS/Resources/Assets.car"
@@ -65,7 +65,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>Voice</string>
+    <string>mbl</string>
     <key>CFBundleIconFile</key>
     <string>Voice</string>
     <key>CFBundleIconName</key>
