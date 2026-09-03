@@ -294,7 +294,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let description: String
 
         if isListening {
-            symbolName = "waveform.circle.fill"
+            symbolName = "waveform"
             description = "Voice listening"
         } else if modelStatus == .ready {
             symbolName = "waveform"
