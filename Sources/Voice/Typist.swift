@@ -8,10 +8,14 @@ final class Typist {
     private static let chunkSize = 20
     private static let returnKeyCode: CGKeyCode = 36
 
+    private var lastTypedAt: Date?
+    private var lastTypedEndedWithSpace = true
+
     func deliver(_ text: String) -> TypeDelivery {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .nothing
         }
+        let text = needsLeadingSpace() ? " " + text : text
 
         guard AXIsProcessTrusted() else {
             AppLog.write(
@@ -35,7 +39,23 @@ final class Typist {
                 post(key: Self.returnKeyCode, source: source)
             }
         }
+        lastTypedAt = Date()
+        lastTypedEndedWithSpace = text.last?.isWhitespace ?? true
         return .typed
+    }
+
+    /// True when the character before the cursor is not whitespace, so the
+    /// typed text would otherwise run into the previous word.
+    private func needsLeadingSpace() -> Bool {
+        if let previous = FocusedText.characterBeforeCursor() {
+            AppLog.write("focused text: previous char=\(previous.debugDescription)")
+            return !previous.isWhitespace && !previous.isNewline
+        }
+        guard let lastTypedAt, Date().timeIntervalSince(lastTypedAt) < 60 else {
+            return false
+        }
+        AppLog.write("focused text unavailable; using recent-dictation heuristic")
+        return !lastTypedEndedWithSpace
     }
 
     private func post(unicode: [UniChar], source: CGEventSource) {
