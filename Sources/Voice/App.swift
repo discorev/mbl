@@ -158,8 +158,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 guard !Task.isCancelled else { return }
                 AppLog.write(
-                    "cleanup unavailable: \(error.localizedDescription) "
-                        + "Raw transcripts will be typed."
+                    "cleanup startup unavailable: \(error.localizedDescription). "
+                        + "Cleanup will retry on demand."
                 )
             }
         }
