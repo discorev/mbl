@@ -37,7 +37,7 @@ final class Typist {
 
         guard AXIsProcessTrusted() else {
             AppLog.write(
-                "Accessibility permission is missing; cannot type. Grant Voice in "
+                "Accessibility permission is missing; cannot type. Grant mbl in "
                     + "System Settings > Privacy & Security > Accessibility."
             )
             return .accessibilityRequired

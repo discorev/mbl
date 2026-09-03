@@ -297,15 +297,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if isListening {
             symbolName = "waveform"
-            description = "Voice listening"
+            description = "mbl listening"
         } else if modelStatus == .ready {
             symbolName = "waveform"
-            description = "Voice"
+            description = "mbl"
         } else {
             symbolName = "waveform.slash"
             description = modelStatus == .loading
-                ? "Voice loading speech model"
-                : "Voice speech model unavailable"
+                ? "mbl loading speech model"
+                : "mbl speech model unavailable"
         }
 
         guard let image = NSImage(
@@ -390,7 +390,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forInfoDictionaryKey: "CFBundleShortVersionString"
         ) as? String
         let versionItem = NSMenuItem(
-            title: version.map { "Voice \($0)" } ?? "Voice",
+            title: version.map { "mbl \($0)" } ?? "mbl",
             action: nil,
             keyEquivalent: ""
         )
@@ -437,7 +437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
-            title: "Quit Voice",
+            title: "Quit mbl",
             action: #selector(quit),
             keyEquivalent: "q"
         )

@@ -31,7 +31,7 @@ Create an app bundle with:
 scripts/bundle.sh
 ```
 
-The script writes `build/Voice.app` and signs it with the first Apple Development identity in your keychain. If no identity is available, it exits with an error so rebuilding cannot silently invalidate macOS privacy grants. You can select a specific identity with `VOICE_SIGN_IDENTITY`, or deliberately permit an ad-hoc signature with `VOICE_ALLOW_ADHOC_SIGNING=1 scripts/bundle.sh`. The bundle version defaults to `0.0.0`; set `VOICE_VERSION` to write both app version fields. Set `VOICE_RELEASE=1` to use the first Developer ID Application identity, enable the hardened runtime, and add the Sparkle release feed; `VOICE_SIGN_IDENTITY` still overrides the selected identity.
+The script writes `build/mbl.app` and signs it with the first Apple Development identity in your keychain. If no identity is available, it exits with an error so rebuilding cannot silently invalidate macOS privacy grants. You can select a specific identity with `VOICE_SIGN_IDENTITY`, or deliberately permit an ad-hoc signature with `VOICE_ALLOW_ADHOC_SIGNING=1 scripts/bundle.sh`. The bundle version defaults to `0.0.0`; set `VOICE_VERSION` to write both app version fields. Set `VOICE_RELEASE=1` to use the first Developer ID Application identity, enable the hardened runtime, and add the Sparkle release feed; `VOICE_SIGN_IDENTITY` still overrides the selected identity.
 
 Open the app and grant Microphone, Input Monitoring, and Accessibility access when macOS prompts you. Input Monitoring enables the hotkey, and Accessibility enables typing.
 
@@ -48,7 +48,7 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-The release workflow signs and notarizes the app, then publishes `Voice-X.Y.Z.zip` and `appcast.xml` on the GitHub Release. Move the unzipped app into Applications before first launch, otherwise macOS runs it from a read-only translocated path and in-app updates cannot install. Local builds do not self-update.
+The release workflow signs and notarizes the app, then publishes `mbl-X.Y.Z.zip` and `appcast.xml` on the GitHub Release. Move the unzipped app into Applications before first launch, otherwise macOS runs it from a read-only translocated path and in-app updates cannot install. Local builds do not self-update.
 
 The following secrets live in the GitHub `release` environment, which is restricted to `v*` tags:
 

@@ -58,8 +58,8 @@ final class Hotkey {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
             AppLog.write(
-                "Unable to create the keyboard event tap. Grant Accessibility to Voice.app in "
-                    + "System Settings > Privacy & Security > Accessibility; Voice will keep running."
+                "Unable to create the keyboard event tap. Grant Accessibility to mbl.app in "
+                    + "System Settings > Privacy & Security > Accessibility; mbl will keep running."
             )
             return
         }

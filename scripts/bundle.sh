@@ -32,7 +32,7 @@ else
 fi
 if [ "$IDENTITY" = "-" ]; then
     printf '%s\n' \
-        'WARNING: Voice.app will be ad-hoc signed.' \
+        'WARNING: mbl.app will be ad-hoc signed.' \
         'macOS privacy permissions will need to be granted again after each rebuild.' >&2
 fi
 
@@ -47,7 +47,7 @@ sign_code() {
 cd "$ROOT"
 swift build -c release
 BIN_DIR=$(swift build -c release --show-bin-path)
-APP="$ROOT/build/Voice.app"
+APP="$ROOT/build/mbl.app"
 CONTENTS="$APP/Contents"
 SPARKLE_FRAMEWORK="$CONTENTS/Frameworks/Sparkle.framework"
 
@@ -75,7 +75,9 @@ cat > "$CONTENTS/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key>
     <string>com.olliespage.mbl-voice</string>
     <key>CFBundleName</key>
-    <string>Voice</string>
+    <string>mbl</string>
+    <key>CFBundleDisplayName</key>
+    <string>mbl</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -87,7 +89,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
     <key>LSUIElement</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Voice needs microphone access to transcribe your speech.</string>
+    <string>mbl needs microphone access to transcribe your speech.</string>
     <key>SUEnableAutomaticChecks</key>
     <true/>
     <key>SUScheduledCheckInterval</key>
@@ -100,7 +102,7 @@ PLIST
 
 if [ "$RELEASE" = "1" ]; then
     /usr/libexec/PlistBuddy -c \
-        'Add :SUFeedURL string https://github.com/discorev/mbl-voice/releases/latest/download/appcast.xml' \
+        'Add :SUFeedURL string https://github.com/discorev/mbl/releases/latest/download/appcast.xml' \
         "$CONTENTS/Info.plist"
 fi
 

@@ -8,7 +8,7 @@ enum AppLog {
         if truncate {
             try? Data().write(to: fileURL)
         }
-        write(truncate ? "Voice started" : "Voice self-test started")
+        write(truncate ? "mbl started" : "mbl self-test started")
     }
 
     static func write(_ message: String) {

@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           VOICE_RELEASE=1 VOICE_VERSION="$VERSION" scripts/bundle.sh
-          codesign --verify --deep --strict --verbose=2 build/Voice.app
+          codesign --verify --deep --strict --verbose=2 build/mbl.app
 
       - name: Notarize and staple app
         shell: bash
@@ -72,9 +72,9 @@ jobs:
           trap 'rm -rf "$NOTARY_TEMP_DIR"' EXIT
           printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
           chmod 600 "$ASC_KEY_PATH"
-          ditto -c -k --keepParent build/Voice.app build/Voice-notarize.zip
+          ditto -c -k --keepParent build/mbl.app build/mbl-notarize.zip
           SUBMIT_EXIT=0
-          xcrun notarytool submit build/Voice-notarize.zip --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait --timeout 30m --output-format json > "$SUBMISSION_RESULT" || SUBMIT_EXIT=$?
+          xcrun notarytool submit build/mbl-notarize.zip --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait --timeout 30m --output-format json > "$SUBMISSION_RESULT" || SUBMIT_EXIT=$?
           cat "$SUBMISSION_RESULT"
           SUBMISSION_ID=$(plutil -extract id raw -o - "$SUBMISSION_RESULT" 2>/dev/null || true)
           SUBMISSION_STATUS=$(plutil -extract status raw -o - "$SUBMISSION_RESULT" 2>/dev/null || true)
@@ -84,18 +84,18 @@ jobs:
             fi
             exit 1
           fi
-          xcrun stapler staple build/Voice.app
-          spctl --assess --type execute --verbose=4 build/Voice.app
+          xcrun stapler staple build/mbl.app
+          spctl --assess --type execute --verbose=4 build/mbl.app
 
       - name: Package release
         shell: bash
-        run: ditto -c -k --keepParent build/Voice.app "build/Voice-$VERSION.zip"
+        run: ditto -c -k --keepParent build/mbl.app "build/mbl-$VERSION.zip"
 
       - name: Generate appcast
         shell: bash
         run: |
           set -euo pipefail
-          ZIP_SIZE=$(stat -f %z "build/Voice-$VERSION.zip")
+          ZIP_SIZE=$(stat -f %z "build/mbl-$VERSION.zip")
           PUB_DATE=$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')
           cat > build/appcast.xml <<XML
           <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
@@ -107,7 +107,7 @@ jobs:
                 <sparkle:version>$VERSION</sparkle:version>
                 <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
                 <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-                <enclosure url="https://github.com/discorev/mbl-voice/releases/download/v$VERSION/Voice-$VERSION.zip"
+                <enclosure url="https://github.com/discorev/mbl/releases/download/v$VERSION/mbl-$VERSION.zip"
                            length="$ZIP_SIZE" type="application/octet-stream"/>
               </item>
             </channel>
@@ -119,7 +119,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            build/Voice-${{ env.VERSION }}.zip
+            build/mbl-${{ env.VERSION }}.zip
             build/appcast.xml
           name: ${{ github.ref_name }}
           generate_release_notes: true
