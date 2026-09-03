@@ -31,6 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var dictation: DictationController?
     private var modelLoadTask: Task<Void, Never>?
     private var cleanerStartTask: Task<Void, Never>?
+    private var configWatcher: ConfigWatcher?
+    private var currentConfig: Config?
     private var selfTestTask: Task<Void, Never>?
     private var cleanerTestTask: Task<Void, Never>?
     private var auroraTestTask: Task<Void, Never>?
@@ -74,6 +76,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             beginCleanerStartup(cleaner)
         }
         beginModelLoading()
+
+        currentConfig = config
+        let configWatcher = ConfigWatcher { [weak self] in
+            self?.reloadConfig()
+        }
+        self.configWatcher = configWatcher
+        configWatcher.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -82,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         selfTestTask?.cancel()
         cleanerTestTask?.cancel()
         auroraTestTask?.cancel()
+        configWatcher?.stop()
         dictation?.shutdown()
         hotkey?.stop()
         if let cleaner {
@@ -100,6 +110,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             return .fallbackValue
         }
+    }
+
+    private func reloadConfig() {
+        guard let currentConfig else {
+            return
+        }
+
+        let config: Config
+        do {
+            config = try Config.load()
+        } catch {
+            AppLog.write(
+                "config reload failed; keeping previous values: "
+                    + error.localizedDescription
+            )
+            return
+        }
+
+        guard config != currentConfig else {
+            return
+        }
+
+        if config.hotkey != currentConfig.hotkey {
+            hotkey?.stop()
+            configureHotkey(config: config)
+        }
+
+        let cleanerConfigChanged = config.backend != currentConfig.backend
+            || config.codexModel != currentConfig.codexModel
+            || config.codexThreadMaxTurns != currentConfig.codexThreadMaxTurns
+            || config.cleanupTimeoutSeconds != currentConfig.cleanupTimeoutSeconds
+        if cleanerConfigChanged {
+            cleanerStartTask?.cancel()
+            cleanerStartTask = nil
+
+            let oldCleaner = cleaner
+            let newCleaner = CodexCleaner(config: config)
+            cleaner = newCleaner
+            dictation?.update(codexCleaner: newCleaner)
+
+            if let oldCleaner {
+                Task { await oldCleaner.shutdown() }
+            }
+            if config.backend == .codex {
+                beginCleanerStartup(newCleaner)
+            }
+        }
+
+        self.currentConfig = config
+        AppLog.write("config reloaded")
     }
 
     private func configureDictation(config: Config, cleaner: CodexCleaner) {

@@ -4,7 +4,7 @@ import Foundation
 final class DictationController {
     private let recorder: Recorder
     private let transcriber: Transcriber
-    private let codexCleaner: CodexCleaner
+    private var codexCleaner: CodexCleaner
     private let localCleaner: LocalCleaner
     private let typist: Typist
     private let hud: HUD
@@ -51,6 +51,10 @@ final class DictationController {
 
     func setModelsReady(_ ready: Bool) {
         modelsReady = ready
+    }
+
+    func update(codexCleaner: CodexCleaner) {
+        self.codexCleaner = codexCleaner
     }
 
     func hold() {

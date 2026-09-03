@@ -15,7 +15,7 @@ enum HotkeyKey: String, Codable, Sendable {
     case rightControl
 }
 
-struct Config: Codable, Sendable {
+struct Config: Codable, Equatable, Sendable {
     let hotkey: HotkeyKey
     let backend: CleanupBackend
     let codexModel: String

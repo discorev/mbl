@@ -39,11 +39,11 @@ A stable Apple Development identity matters because an ad-hoc signature loses it
 
 ## Configuration
 
-mbl creates `~/.config/voice/config.json` on first launch.
+mbl creates `~/.config/voice/config.json` on first launch. Changes to this file are picked up automatically while mbl runs.
 
 | Key | Default | Purpose |
 | --- | --- | --- |
-| `hotkey` | `rightOption` | Push-to-talk key: `rightOption` or `rightControl`. Restart mbl after changing it. |
+| `hotkey` | `rightOption` | Push-to-talk key: `rightOption` or `rightControl`. |
 | `backend` | `codex` | Primary cleanup backend: `codex` or `local`. |
 | `codexModel` | `gpt-5.6-luna` | Model used by Codex. |
 | `codexThreadMaxTurns` | `50` | Cleanup turns before rotating the warm thread. |
