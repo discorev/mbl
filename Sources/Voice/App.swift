@@ -321,10 +321,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         } else if hasUpdateBadge {
             let size = NSSize(width: 18, height: 18)
-            let badgeDiameter: CGFloat = 6
+            let badgeDiameter: CGFloat = 9
             let badgeRect = NSRect(
-                x: size.width - badgeDiameter - 1,
-                y: size.height - badgeDiameter - 1,
+                x: size.width - badgeDiameter,
+                y: 0,
                 width: badgeDiameter,
                 height: badgeDiameter
             )
@@ -345,6 +345,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 context.compositingOperation = .sourceOver
                 NSColor.black.setFill()
                 NSBezierPath(ovalIn: badgeRect).fill()
+                context.compositingOperation = .destinationOut
+                NSColor.black.setStroke()
+                let arrow = NSBezierPath()
+                arrow.lineWidth = 1.5
+                arrow.lineCapStyle = .round
+                arrow.lineJoinStyle = .round
+                let midX = badgeRect.midX
+                let top = badgeRect.maxY - 2
+                let bottom = badgeRect.minY + 2
+                arrow.move(to: NSPoint(x: midX, y: top))
+                arrow.line(to: NSPoint(x: midX, y: bottom))
+                arrow.move(to: NSPoint(x: midX - 2, y: bottom + 2))
+                arrow.line(to: NSPoint(x: midX, y: bottom))
+                arrow.line(to: NSPoint(x: midX + 2, y: bottom + 2))
+                arrow.stroke()
                 context.restoreGraphicsState()
                 return true
             }
