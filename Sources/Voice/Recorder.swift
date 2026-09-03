@@ -35,7 +35,8 @@ final class Recorder {
             onBus: 0,
             bufferSize: 2_048,
             format: inputFormat
-        ) { [accumulator, converter] buffer, _ in
+        ) { @Sendable [accumulator, converter] buffer, _ in
+            nonisolated(unsafe) let buffer = buffer
             do {
                 accumulator.append(try converter.convert(buffer))
             } catch {
