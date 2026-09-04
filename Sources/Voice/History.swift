@@ -1,5 +1,14 @@
 import Foundation
 
+enum HistoryTimestamp {
+    static let format = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+    private static let wholeSeconds = Date.ISO8601FormatStyle()
+
+    static func date(from value: String) -> Date? {
+        (try? format.parse(value)) ?? (try? wholeSeconds.parse(value))
+    }
+}
+
 struct HistoryEntry: Codable, Identifiable, Sendable {
     var id: String { ts + "|" + raw }
 
@@ -32,9 +41,7 @@ struct HistoryEntry: Codable, Identifiable, Sendable {
         result: CleanupResult,
         transcribeDuration: TimeInterval
     ) {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        ts = formatter.string(from: date)
+        ts = HistoryTimestamp.format.format(date)
         self.audioSeconds = audioSeconds
         self.raw = raw
         cleaned = result.cleaned
@@ -76,6 +83,8 @@ struct HistoryEntry: Codable, Identifiable, Sendable {
 }
 
 enum History {
+    private static let writeLock = NSLock()
+
     static var fileURL: URL {
         Config.directoryURL.appendingPathComponent("history.jsonl")
     }
@@ -84,6 +93,8 @@ enum History {
         _ entry: HistoryEntry,
         fileManager: FileManager = .default
     ) throws {
+        writeLock.lock()
+        defer { writeLock.unlock() }
         let url = fileURL
         try fileManager.createDirectory(
             at: url.deletingLastPathComponent(),
@@ -105,16 +116,20 @@ enum History {
         try handle.close()
     }
 
-    static func ensureFileExists(fileManager: FileManager = .default) throws {
-        let url = fileURL
-        try fileManager.createDirectory(
-            at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        if !fileManager.fileExists(atPath: url.path),
-           !fileManager.createFile(atPath: url.path, contents: nil) {
-            throw HistoryError.couldNotCreateFile(url)
+    static func remove(id: String, directoryURL: URL = Config.directoryURL) throws {
+        // Serialize with dictation appends so a rewrite cannot discard a new entry.
+        writeLock.lock()
+        defer { writeLock.unlock() }
+        let url = directoryURL.appendingPathComponent("history.jsonl")
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        let data = try Data(contentsOf: url)
+        // Preserve other records verbatim, including unknown fields and partial lines.
+        let lines = data.split(separator: 0x0A, omittingEmptySubsequences: false)
+        let retained = lines.filter { line in
+            (try? JSONDecoder().decode(HistoryEntry.self, from: Data(line)))?.id != id
         }
+        guard retained.count != lines.count else { return }
+        try Data(retained.joined(separator: [UInt8(0x0A)])).write(to: url, options: .atomic)
     }
 }
 

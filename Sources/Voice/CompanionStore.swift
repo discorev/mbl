@@ -12,16 +12,34 @@ final class CompanionStore {
     var localPrompt = ""
     var errorMessage: String?
 
-    @ObservationIgnored private let directoryURL: URL
+    @ObservationIgnored let directoryURL: URL
     @ObservationIgnored private var previousReadError: String?
     @ObservationIgnored private var historyWarning: String?
-    private struct HistorySignature: Equatable {
+    private struct FileSignature: Equatable {
         let date: Date?
         let size: UInt64?
     }
-    @ObservationIgnored private var historySignature: HistorySignature?
-    @ObservationIgnored private var loadedConfig: Config = .fallbackValue
-    @ObservationIgnored private var loadedPrompts: [CleanupBackend: (url: URL, text: String)] = [:]
+    @ObservationIgnored private var historySignature: FileSignature?
+    struct PromptSnapshot: Equatable {
+        let url: URL
+        let text: String
+    }
+    private var loadedPrompts: [CleanupBackend: PromptSnapshot] = [:]
+    @ObservationIgnored private var fileSignatures: [URL: FileSignature] = [:]
+
+    func promptSnapshot(for backend: CleanupBackend) -> PromptSnapshot? { loadedPrompts[backend] }
+
+    private func signature(at url: URL) -> FileSignature? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else { return nil }
+        return FileSignature(date: attributes[.modificationDate] as? Date, size: attributes[.size] as? UInt64)
+    }
+
+    private func readIfChanged(at url: URL, read: () throws -> Void) throws {
+        let current = signature(at: url)
+        guard current == nil || current != fileSignatures[url] else { return }
+        try read()
+        fileSignatures[url] = current ?? signature(at: url)
+    }
 
     init(directoryURL: URL = Config.directoryURL) {
         self.directoryURL = directoryURL
@@ -31,23 +49,38 @@ final class CompanionStore {
     func refresh() {
         var errors: [String] = []
         do {
-            let value = try Config.load(directoryURL: directoryURL)
-            config = value
-            loadedConfig = value
+            let configURL = directoryURL.appendingPathComponent("config.json")
+            if !FileManager.default.fileExists(atPath: directoryURL.appendingPathComponent("vocab.txt").path) {
+                fileSignatures[configURL] = nil
+            }
+            try readIfChanged(at: configURL) {
+                config = try Config.load(directoryURL: directoryURL)
+            }
+            // Keep file repair and legacy prompt migration independent of config reads.
+            try Prompts.prepare(config: config, directoryURL: directoryURL, fileManager: .default)
         } catch {
             errors.append("Could not read settings: \(error.localizedDescription)")
         }
         do {
-            vocabulary = Self.terms(in: try vocabularyText())
+            try readIfChanged(at: directoryURL.appendingPathComponent("vocab.txt")) {
+                vocabulary = Prompts.vocabularyTerms(in: try vocabularyText())
+            }
         } catch {
             errors.append("Could not read vocabulary: \(error.localizedDescription)")
         }
         for backend in [CleanupBackend.codex, .local] {
             do {
                 let url = try promptURL(for: backend)
-                let text = try String(contentsOf: url, encoding: .utf8)
-                loadedPrompts[backend] = (url, text)
-                if backend == .codex { codexPrompt = text } else { localPrompt = text }
+                // Switching models must also load a previously visited prompt file.
+                if loadedPrompts[backend]?.url != url { fileSignatures[url] = nil }
+                try readIfChanged(at: url) {
+                    let text = try String(contentsOf: url, encoding: .utf8)
+                    loadedPrompts[backend] = PromptSnapshot(url: url, text: text)
+                }
+                if let prompt = loadedPrompts[backend] {
+                    if backend == .codex { codexPrompt = prompt.text }
+                    else { localPrompt = prompt.text }
+                }
             } catch {
                 errors.append("Could not read \(backend.rawValue) prompt: \(error.localizedDescription)")
             }
@@ -55,9 +88,8 @@ final class CompanionStore {
         do {
             let url = directoryURL.appendingPathComponent("history.jsonl")
             if FileManager.default.fileExists(atPath: url.path) {
-                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-                let signature = HistorySignature(date: attributes[.modificationDate] as? Date, size: attributes[.size] as? UInt64)
-                if signature == historySignature {
+                let signature = signature(at: url)
+                if let signature, signature == historySignature {
                     if let historyWarning { errors.append(historyWarning) }
                     reportReadErrors(errors)
                     return
@@ -89,6 +121,18 @@ final class CompanionStore {
         reportReadErrors(errors)
     }
 
+    func removeHistoryEntry(_ entry: HistoryEntry) throws {
+        try History.remove(id: entry.id, directoryURL: directoryURL)
+        historySignature = nil
+        refresh()
+    }
+
+    func updateConfig(_ mutate: (inout Config) -> Void) {
+        var draft = config
+        mutate(&draft)
+        do { try saveConfig(draft) } catch { errorMessage = error.localizedDescription }
+    }
+
     func saveConfig(_ value: Config, original: Config? = nil) throws {
         try Self.validate(value)
         let url = directoryURL.appendingPathComponent("config.json")
@@ -97,7 +141,7 @@ final class CompanionStore {
         let diskConfig = try JSONDecoder().decode(Config.self, from: currentData)
         let normalized = try Self.jsonObject(JSONEncoder().encode(diskConfig))
         var current = try Self.jsonObject(currentData)
-        let baseline = try Self.jsonObject(JSONEncoder().encode(original ?? loadedConfig))
+        let baseline = try Self.jsonObject(JSONEncoder().encode(original ?? config))
         let proposed = try Self.jsonObject(JSONEncoder().encode(value))
         for (key, next) in proposed {
             if !Self.equalJSON(baseline[key], next) {
@@ -113,6 +157,7 @@ final class CompanionStore {
         try Self.validate(merged)
         try Prompts.prepare(config: merged, directoryURL: directoryURL, fileManager: .default)
         try data.write(to: url, options: .atomic)
+        fileSignatures[url] = nil
         refresh()
     }
 
@@ -122,11 +167,11 @@ final class CompanionStore {
             throw CompanionStoreError.invalid("Enter one vocabulary term on a single line.")
         }
         var text = try vocabularyText()
-        guard !Self.terms(in: text).contains(where: { $0.caseInsensitiveCompare(term) == .orderedSame }) else { return }
+        guard !Prompts.vocabularyTerms(in: text).contains(where: { $0.caseInsensitiveCompare(term) == .orderedSame }) else { return }
         if !text.isEmpty && !text.hasSuffix("\n") { text += "\n" }
         text += term + "\n"
         try Data(text.utf8).write(to: directoryURL.appendingPathComponent("vocab.txt"), options: .atomic)
-        vocabulary = Self.terms(in: text)
+        vocabulary = Prompts.vocabularyTerms(in: text)
         errorMessage = nil
     }
 
@@ -137,23 +182,22 @@ final class CompanionStore {
             .filter { $0.trimmingCharacters(in: .whitespacesAndNewlines) != word }
             .joined(separator: "\n")
         try Data(updated.utf8).write(to: directoryURL.appendingPathComponent("vocab.txt"), options: .atomic)
-        vocabulary = Self.terms(in: updated)
+        vocabulary = Prompts.vocabularyTerms(in: updated)
         errorMessage = nil
     }
 
-    func savePrompt(_ text: String, backend: CleanupBackend, originalText: String? = nil) throws {
+    func savePrompt(_ text: String, original: PromptSnapshot) throws {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw CompanionStoreError.invalid("The cleanup prompt cannot be empty.")
         }
-        let url = try promptURL(for: backend)
-        guard let original = loadedPrompts[backend], original.url == url,
-              try String(contentsOf: url, encoding: .utf8) == (originalText ?? original.text) else {
+        let url = original.url
+        guard try String(contentsOf: url, encoding: .utf8) == original.text else {
             throw CompanionStoreError.conflict("These instructions changed outside this window. Copy any edits you want to keep, then choose Reload instructions and try again.")
         }
         try Data(text.utf8).write(to: url, options: .atomic)
-        loadedPrompts[backend] = (url, text)
-        if backend == .codex { codexPrompt = text } else { localPrompt = text }
+        fileSignatures[url] = nil
         errorMessage = nil
+        refresh()
     }
 
     private func reportReadErrors(_ errors: [String]) {
@@ -161,26 +205,21 @@ final class CompanionStore {
         // Polling must not dismiss a save error, or repeatedly reopen a dismissed read alert.
         if let message, message != previousReadError, errorMessage == nil {
             errorMessage = message
+            previousReadError = message
+        } else if message == nil {
+            previousReadError = nil
         }
-        previousReadError = message
     }
 
     private func promptURL(for backend: CleanupBackend) throws -> URL {
         switch backend {
-        case .codex: Prompts.codexURL(for: loadedConfig.codexModel, directoryURL: directoryURL)
+        case .codex: Prompts.codexURL(for: config.codexModel, directoryURL: directoryURL)
         case .local: try Prompts.localLocation(directoryURL: directoryURL).url
         }
     }
 
     private func vocabularyText() throws -> String {
         try String(contentsOf: directoryURL.appendingPathComponent("vocab.txt"), encoding: .utf8)
-    }
-
-    private static func terms(in text: String) -> [String] {
-        var seen = Set<String>()
-        return text.components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && !$0.hasPrefix("#") && seen.insert($0).inserted }
     }
 
     private static func jsonObject(_ data: Data) throws -> [String: Any] {

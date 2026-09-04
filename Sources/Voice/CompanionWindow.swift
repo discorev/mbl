@@ -12,6 +12,8 @@ private final class CompanionWindowState {
     var localDraft = ""
     var originalCodex = ""
     var originalLocal = ""
+    var codexSource: CompanionStore.PromptSnapshot?
+    var localSource: CompanionStore.PromptSnapshot?
     var draftsLoaded = false
 }
 
@@ -50,7 +52,6 @@ final class CompanionWindowController: NSObject, NSWindowDelegate {
     }
 
     func show() {
-        store.refresh()
         if window.isMiniaturized { window.deminiaturize(nil) }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -191,6 +192,7 @@ private struct CompanionHistoryView: View {
     @State private var selection: String?
     @State private var copied = false
     @State private var originalExpanded = true
+    @State private var pendingDeletion: HistoryEntry?
     private var filtered: [HistoryEntry] {
         store.history.filter { query.isEmpty || ($0.raw + " " + ($0.cleaned ?? "")).localizedCaseInsensitiveContains(query) }
     }
@@ -202,20 +204,23 @@ private struct CompanionHistoryView: View {
                 TextField("Search dictations", text: $query).textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Search dictations")
                 Text("RECENT DICTATIONS").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 8)
-                ScrollView {
-                    LazyVStack(spacing: 5) {
-                        ForEach(filtered) { entry in
-                            Button { selection = entry.id; copied = false } label: {
-                                VStack(alignment: .leading, spacing: 7) {
-                                    Text(dateLabel(entry.ts)).font(.system(size: 10)).foregroundStyle(.secondary)
-                                    Text(entry.cleaned ?? entry.raw).font(.system(size: 12)).lineLimit(2).multilineTextAlignment(.leading)
-                                    Text("\(backendLabel(entry.backend)) · \(entry.audioSeconds, specifier: "%.1f")s").font(.system(size: 10)).foregroundStyle(.secondary)
-                                }.frame(maxWidth: .infinity, alignment: .leading).padding(11)
-                                    .background(selected?.id == entry.id ? companionAccent.opacity(0.1) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
-                            }.buttonStyle(.plain)
-                        }
+                List(selection: Binding(get: { selected?.id }, set: { selection = $0 })) {
+                    ForEach(filtered) { entry in
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text(dateLabel(entry.ts)).font(.system(size: 10)).foregroundStyle(.secondary)
+                            Text(entry.cleaned ?? entry.raw).font(.system(size: 12)).lineLimit(2).multilineTextAlignment(.leading)
+                            Text("\(backendLabel(entry.backend)) · \(entry.audioSeconds, specifier: "%.1f")s").font(.system(size: 10)).foregroundStyle(.secondary)
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(11)
+                            .contentShape(Rectangle())
+                            .tag(entry.id)
+                            .listRowInsets(EdgeInsets())
+                            .contextMenu {
+                                Button("Delete", role: .destructive) { pendingDeletion = entry }
+                            }
                     }
                 }
+                .listStyle(.plain)
+                .onDeleteCommand { if let entry = selected { pendingDeletion = entry } }
             }.padding(12).frame(width: 225)
             Divider()
             if let entry = selected {
@@ -244,11 +249,44 @@ private struct CompanionHistoryView: View {
                             .font(.system(size: 10)).foregroundStyle(.secondary).padding(.top, 8)
                     }.padding(24)
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    HStack {
+                        Spacer()
+                        Button("Delete", systemImage: "trash", role: .destructive) { pendingDeletion = entry }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 16)
+                }
             } else {
                 ContentUnavailableView(query.isEmpty ? "No dictations yet" : "No matching dictations", systemImage: "waveform", description: Text(query.isEmpty ? "Hold your push-to-talk key to start. Your words will appear here." : "Try another word."))
             }
         }
         .onChange(of: selected?.id) { _, _ in copied = false }
+        .confirmationDialog("Delete dictation?", isPresented: Binding(
+            get: { pendingDeletion != nil },
+            set: { if !$0 { pendingDeletion = nil } }
+        ), titleVisibility: .visible, presenting: pendingDeletion) { entry in
+            Button("Delete", role: .destructive) { delete(entry); pendingDeletion = nil }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: { entry in
+            Text("This permanently deletes the dictation from \(dateLabel(entry.ts)). This cannot be undone.")
+        }
+    }
+
+    private func delete(_ entry: HistoryEntry) {
+        let entries = filtered
+        let wasSelected = selected?.id == entry.id
+        let index = entries.firstIndex(where: { $0.id == entry.id }) ?? 0
+        do {
+            try store.removeHistoryEntry(entry)
+            if wasSelected {
+                let remaining = filtered
+                selection = remaining.isEmpty ? nil : remaining[min(index, remaining.count - 1)].id
+                copied = false
+            }
+        } catch {
+            store.errorMessage = "Could not delete dictation: \(error.localizedDescription)"
+        }
     }
 
     private func timingLabel(_ entry: HistoryEntry) -> String {
@@ -263,9 +301,7 @@ private struct CompanionHistoryView: View {
         switch backend { case .codex: "Codex"; case .local: "On-device"; case .raw: "Original" }
     }
     private func dateLabel(_ value: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+        let date = HistoryTimestamp.date(from: value)
         return date?.formatted(date: .abbreviated, time: .shortened) ?? value
     }
 }
@@ -312,6 +348,7 @@ private struct CompanionCleanupView: View {
     @State private var saved = false
     @State private var confirmingReload = false
     @State private var reloadBackend: CleanupBackend = .codex
+    private var source: CompanionStore.PromptSnapshot? { store.config.backend == .codex ? state.codexSource : state.localSource }
     private var original: String { store.config.backend == .codex ? state.originalCodex : state.originalLocal }
     private var latest: String { store.config.backend == .codex ? store.codexPrompt : store.localPrompt }
     private var isDirty: Bool { draft.wrappedValue != original }
@@ -326,14 +363,14 @@ private struct CompanionCleanupView: View {
                 pageHeading("Still sounds like you.", subtitle: "Choose how mbl tidies your speech before typing it.")
                 VStack(spacing: 0) {
                     settingRow("Clean up with", subtitle: store.config.backend == .codex ? "Transcripts are sent to Codex for cleanup." : "Cleanup stays on this Mac.") {
-                        Picker("Clean up with", selection: Binding(get: { store.config.backend }, set: { value in update { $0.backend = value } })) {
+                        Picker("Clean up with", selection: Binding(get: { store.config.backend }, set: { value in store.updateConfig { $0.backend = value } })) {
                             Text("Codex").tag(CleanupBackend.codex)
                             Text("On-device").tag(CleanupBackend.local)
                         }.labelsHidden().frame(width: 150)
                     }
                     Divider()
                     settingRow("Use on-device fallback", subtitle: "If Codex is unavailable, keep dictating locally.") {
-                        Toggle("Use on-device fallback", isOn: Binding(get: { store.config.fallback == .local }, set: { value in update { $0.fallback = value ? .local : .none } }))
+                        Toggle("Use on-device fallback", isOn: Binding(get: { store.config.fallback == .local }, set: { value in store.updateConfig { $0.fallback = value ? .local : .none } }))
                             .labelsHidden().toggleStyle(.switch).disabled(store.config.backend == .local)
                     }
                 }.background(.background, in: RoundedRectangle(cornerRadius: 9))
@@ -347,23 +384,29 @@ private struct CompanionCleanupView: View {
                     Button("Reload instructions") {
                         reloadBackend = store.config.backend
                         if isDirty { confirmingReload = true } else { reloadInstructions(reloadBackend) }
-                    }.disabled(!isDirty && original == latest)
+                    }.disabled(source != nil && !isDirty && original == latest)
                     Button(saved ? "Instructions saved" : "Save instructions") {
-                        do { try store.savePrompt(draft.wrappedValue, backend: store.config.backend,
-                            originalText: store.config.backend == .codex ? state.originalCodex : state.originalLocal)
-                            if store.config.backend == .codex { state.originalCodex = state.codexDraft }
-                            else { state.originalLocal = state.localDraft }
-                            saved = true }
+                        do {
+                            guard let source else {
+                                throw CompanionStoreError.invalid("These instructions could not be loaded. Choose Reload instructions before saving.")
+                            }
+                            try store.savePrompt(draft.wrappedValue, original: source)
+                            if store.config.backend == .codex { state.originalCodex = state.codexDraft; state.codexSource = .init(url: source.url, text: state.codexDraft) }
+                            else { state.originalLocal = state.localDraft; state.localSource = .init(url: source.url, text: state.localDraft) }
+                            if store.config.backend == .codex, state.codexSource != store.promptSnapshot(for: .codex) {
+                                adoptInstructions(.codex)
+                            } else { saved = true }
+                        }
                         catch { store.errorMessage = error.localizedDescription }
                     }.buttonStyle(.borderedProminent)
                 }
             }.padding(28)
         }.onAppear {
             if !state.draftsLoaded || state.codexDraft == state.originalCodex {
-                state.codexDraft = store.codexPrompt; state.originalCodex = store.codexPrompt
+                adoptInstructions(.codex)
             }
             if !state.draftsLoaded || state.localDraft == state.originalLocal {
-                state.localDraft = store.localPrompt; state.originalLocal = store.localPrompt
+                adoptInstructions(.local)
             }
             state.draftsLoaded = true
         }
@@ -374,27 +417,29 @@ private struct CompanionCleanupView: View {
             Text("This replaces your edits with the instructions currently saved on this Mac.")
         }
         .onChange(of: store.config.backend) { _, _ in saved = false }
-        .onChange(of: store.codexPrompt) { _, value in
-            if state.codexDraft == state.originalCodex { state.codexDraft = value; state.originalCodex = value }
+        .onChange(of: store.promptSnapshot(for: .codex)) { _, _ in
+            if state.codexDraft == state.originalCodex && state.codexSource != store.promptSnapshot(for: .codex) { adoptInstructions(.codex) }
         }
-        .onChange(of: store.localPrompt) { _, value in
-            if state.localDraft == state.originalLocal { state.localDraft = value; state.originalLocal = value }
+        .onChange(of: store.promptSnapshot(for: .local)) { _, _ in
+            if state.localDraft == state.originalLocal && state.localSource != store.promptSnapshot(for: .local) { adoptInstructions(.local) }
         }
     }
     private func reloadInstructions(_ backend: CleanupBackend) {
         store.refresh()
+        adoptInstructions(backend)
+    }
+    private func adoptInstructions(_ backend: CleanupBackend) {
+        guard let source = store.promptSnapshot(for: backend) else { return }
         if backend == .codex {
-            state.codexDraft = store.codexPrompt
-            state.originalCodex = store.codexPrompt
+            state.codexDraft = source.text
+            state.originalCodex = source.text
+            state.codexSource = source
         } else {
-            state.localDraft = store.localPrompt
-            state.originalLocal = store.localPrompt
+            state.localDraft = source.text
+            state.originalLocal = source.text
+            state.localSource = source
         }
         saved = false
-    }
-    private func update(_ mutate: (inout Config) -> Void) {
-        var config = store.config; mutate(&config)
-        do { try store.saveConfig(config) } catch { store.errorMessage = error.localizedDescription }
     }
 }
 
@@ -413,13 +458,16 @@ private struct CompanionSettingsView: View {
                 sectionLabel("Dictation")
                 VStack(spacing: 0) {
                     settingRow("Push-to-talk key", subtitle: "Hold to talk. Release to type.") {
-                        Picker("Push-to-talk key", selection: Binding(get: { store.config.hotkey }, set: { value in update { $0.hotkey = value } })) {
+                        Picker("Push-to-talk key", selection: Binding(get: { store.config.hotkey }, set: { value in store.updateConfig { $0.hotkey = value } })) {
                             Text("⌥ Right Option").tag(HotkeyKey.rightOption)
                             Text("⌃ Right Control").tag(HotkeyKey.rightControl)
                         }.labelsHidden().frame(width: 160)
                     }
                     Divider()
                     settingRow("Dictation indicator", subtitle: "Drag it anywhere on your screen.") { Button("Reset position", action: onResetHUD) }
+                }.background(.background, in: RoundedRectangle(cornerRadius: 9))
+                settingRow("Configuration files", subtitle: "Edit settings, prompts, vocabulary and history directly.") {
+                    Button("Open config folder") { NSWorkspace.shared.open(store.directoryURL) }
                 }.background(.background, in: RoundedRectangle(cornerRadius: 9))
                 sectionLabel("Access")
                 VStack(spacing: 0) {
@@ -431,7 +479,7 @@ private struct CompanionSettingsView: View {
                 }.background(.background, in: RoundedRectangle(cornerRadius: 9))
                 sectionLabel("Updates")
                 settingRow("Download updates automatically", subtitle: updaterAvailable ? "You choose when to install them." : "Updates are available in installed release builds.") {
-                    Toggle("Download updates automatically", isOn: Binding(get: { store.config.autoDownloadUpdates }, set: { value in update { $0.autoDownloadUpdates = value } }))
+                    Toggle("Download updates automatically", isOn: Binding(get: { store.config.autoDownloadUpdates }, set: { value in store.updateConfig { $0.autoDownloadUpdates = value } }))
                         .labelsHidden().toggleStyle(.switch).disabled(!updaterAvailable)
                 }.background(.background, in: RoundedRectangle(cornerRadius: 9))
             }.padding(28)
@@ -452,10 +500,6 @@ private struct CompanionSettingsView: View {
         microphone = AVCaptureDevice.authorizationStatus(for: .audio)
         accessibility = AXIsProcessTrusted()
         inputMonitoring = CGPreflightListenEventAccess()
-    }
-    private func update(_ mutate: (inout Config) -> Void) {
-        var config = store.config; mutate(&config)
-        do { try store.saveConfig(config) } catch { store.errorMessage = error.localizedDescription }
     }
 }
 

@@ -93,7 +93,7 @@ Choose **Open mbl** from the menu bar to open the companion window:
 
 Closing the window keeps dictation running in the menu bar without adding a persistent Dock icon. The sidebar shows the installed version. When an update is available, a small download button appears beside it; once downloaded, it becomes an install-and-restart button. Local builds without an update feed do not show update actions.
 
-The menu bar retains the version, update action, HUD reset, and Quit. You can still edit the configuration files directly; the window writes to these same files.
+The menu bar retains the version, update action, HUD reset, and Quit. Use **Open config folder** in Settings to access settings, prompts, vocabulary and history. You can edit these files directly; the window writes to these same files.
 
 For an isolated companion-window preview, run the debug executable with a temporary configuration directory:
 

@@ -30,6 +30,13 @@ enum Prompts {
             .appendingPathComponent("\(codexKey(for: model)).md")
     }
 
+    static func vocabularyTerms(in text: String) -> [String] {
+        var seen = Set<String>()
+        return text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("#") && seen.insert($0).inserted }
+    }
+
     static func instructions(
         at promptURL: URL,
         directoryURL: URL,
@@ -39,10 +46,7 @@ enum Prompts {
         let vocabularyURL = vocabularyURL(in: directoryURL)
         let terms: [String]
         if fileManager.fileExists(atPath: vocabularyURL.path) {
-            terms = try String(contentsOf: vocabularyURL, encoding: .utf8)
-                .components(separatedBy: .newlines)
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+            terms = vocabularyTerms(in: try String(contentsOf: vocabularyURL, encoding: .utf8))
         } else {
             terms = []
         }

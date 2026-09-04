@@ -666,7 +666,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         companionWindow?.updateState = updateState
         companionWindow?.updaterAvailable = updater != nil || isCompanionPreview
-        companionStore?.refresh()
         companionWindow?.show()
     }
 
@@ -724,9 +723,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             downloadUpdate()
         case .ready:
             installAndRestart()
-        case .idle, .upToDate, .failed:
-            checkForUpdates()
-        case .checking, .downloading:
+        default:
             break
         }
     }

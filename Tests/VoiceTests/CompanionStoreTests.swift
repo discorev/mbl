@@ -83,6 +83,51 @@ struct CompanionStoreTests {
         }
     }
 
+    @Test func deletingHistoryPreservesUnloadedEntriesAndOriginalBytes() throws {
+        try withStore { store, directory in
+            let url = directory.appendingPathComponent("history.jsonl")
+            let first = #"{"ts":"2026-09-04T12:00:00Z","audioSeconds":1,"raw":"first","backend":"raw","fallback":false,"transcribeMs":20}"#
+            let second = #"{"ts":"2026-09-04T12:01:00Z","audioSeconds":1,"raw":"second","backend":"raw","fallback":false,"transcribeMs":20,"futureField":true}"#
+            try Data((first + "\n").utf8).write(to: url)
+            store.refresh()
+            let entry = try #require(store.history.first)
+            let suffix = second + "\ninvalid\n{\"ts\":"
+            try Data((first + "\n" + suffix).utf8).write(to: url)
+            try store.removeHistoryEntry(entry)
+            #expect(try Data(contentsOf: url) == Data(suffix.utf8))
+            #expect(store.history.map(\.raw) == ["second"])
+            try store.removeHistoryEntry(entry)
+            #expect(try Data(contentsOf: url) == Data(suffix.utf8))
+        }
+    }
+
+    @Test func deletingLastHistoryEntryPersistsEmptyHistory() throws {
+        try withStore { store, directory in
+            let url = directory.appendingPathComponent("history.jsonl")
+            let row = #"{"ts":"2026-09-04T12:00:00Z","audioSeconds":1,"raw":"last","backend":"raw","fallback":false,"transcribeMs":20}"#
+            try Data((row + "\n").utf8).write(to: url)
+            store.refresh()
+            try store.removeHistoryEntry(#require(store.history.first))
+            #expect(try Data(contentsOf: url).isEmpty)
+            #expect(store.history.isEmpty)
+            #expect(CompanionStore(directoryURL: directory).history.isEmpty)
+        }
+    }
+
+    @Test func failedHistoryDeletionKeepsVisibleEntry() throws {
+        try withStore { store, directory in
+            let url = directory.appendingPathComponent("history.jsonl")
+            let row = #"{"ts":"2026-09-04T12:00:00Z","audioSeconds":1,"raw":"keep","backend":"raw","fallback":false,"transcribeMs":20}"#
+            try Data((row + "\n").utf8).write(to: url)
+            store.refresh()
+            let entry = try #require(store.history.first)
+            try FileManager.default.removeItem(at: url)
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+            #expect(throws: (any Error).self) { try store.removeHistoryEntry(entry) }
+            #expect(store.history.map(\.id) == [entry.id])
+        }
+    }
+
     @Test func pollingPreservesSaveErrorsAndDoesNotRepeatReadAlerts() throws {
         try withStore { store, directory in
             store.errorMessage = "Save failed"
@@ -100,16 +145,110 @@ struct CompanionStoreTests {
 
     @Test func promptConflictSurvivesRefresh() throws {
         try withStore { store, directory in
-            let original = store.codexPrompt
+            let original = try #require(store.promptSnapshot(for: .codex))
             let url = Prompts.codexURL(for: store.config.codexModel, directoryURL: directory)
             try Data("External prompt".utf8).write(to: url)
             store.refresh()
             #expect(throws: CompanionStoreError.self) {
-                try store.savePrompt("My edited prompt", backend: .codex, originalText: original)
+                try store.savePrompt("My edited prompt", original: original)
             }
             #expect(try String(contentsOf: url, encoding: .utf8) == "External prompt")
-            try store.savePrompt("Accepted prompt", backend: .codex, originalText: "External prompt")
+            try store.savePrompt("Accepted prompt", original: try #require(store.promptSnapshot(for: .codex)))
             #expect(store.codexPrompt == "Accepted prompt")
         }
     }
+    @Test func promptDraftKeepsItsFileWhenModelChanges() throws {
+        try withStore { store, directory in
+            let original = try #require(store.promptSnapshot(for: .codex))
+            var external = store.config
+            external.codexModel = "another-model"
+            try JSONEncoder().encode(external).write(to: directory.appendingPathComponent("config.json"))
+            store.refresh()
+            let active = try #require(store.promptSnapshot(for: .codex))
+            #expect(active.url != original.url)
+            try store.savePrompt("Edited original model", original: original)
+            #expect(try String(contentsOf: original.url, encoding: .utf8) == "Edited original model")
+            #expect(try String(contentsOf: active.url, encoding: .utf8) == active.text)
+            #expect(store.codexPrompt == active.text)
+            // Switching back must load the original model even if its signature is cached.
+            external.codexModel = Config.fallbackValue.codexModel
+            try JSONEncoder().encode(external).write(to: directory.appendingPathComponent("config.json"))
+            store.refresh()
+            #expect(store.codexPrompt == "Edited original model")
+        }
+    }
+
+    @Test func suppressedReadErrorAppearsAfterOpenAlertIsDismissed() throws {
+        try withStore { store, directory in
+            let url = directory.appendingPathComponent("vocab.txt")
+            store.errorMessage = "Settings save failed"
+            try Data([0xff]).write(to: url)
+            store.refresh()
+            #expect(store.errorMessage == "Settings save failed")
+            store.errorMessage = nil
+            store.refresh()
+            #expect(store.errorMessage?.contains("Could not read vocabulary") == true)
+            store.errorMessage = nil
+            store.refresh()
+            #expect(store.errorMessage == nil)
+            try Data("Recovered".utf8).write(to: url)
+            store.refresh()
+            #expect(store.vocabulary == ["Recovered"])
+        }
+    }
+
+    @Test func pollingDetectsInPlaceVocabularyAndPromptChanges() throws {
+        try withStore { store, directory in
+            let prompt = try #require(store.promptSnapshot(for: .codex))
+            for url in [directory.appendingPathComponent("vocab.txt"), prompt.url] {
+                let handle = try FileHandle(forWritingTo: url)
+                try handle.seekToEnd()
+                try handle.write(contentsOf: Data("Appended".utf8))
+                try handle.close()
+            }
+            store.refresh()
+            #expect(store.vocabulary == ["Appended"])
+            #expect(store.codexPrompt == prompt.text + "Appended")
+        }
+    }
+
+    @Test func pollingRepairsMissingPromptsAndMigratesLegacyPrompt() throws {
+        try withStore { store, directory in
+            let promptURL = try #require(store.promptSnapshot(for: .codex)).url
+            let configURL = directory.appendingPathComponent("config.json")
+            let configBefore = try Data(contentsOf: configURL)
+            try FileManager.default.removeItem(at: directory.appendingPathComponent("prompts"))
+            try Data("Legacy instructions".utf8).write(to: directory.appendingPathComponent("prompt.md"))
+            store.refresh()
+            #expect(store.codexPrompt == "Legacy instructions")
+            #expect(try String(contentsOf: promptURL, encoding: .utf8) == "Legacy instructions")
+            #expect(!store.localPrompt.isEmpty)
+            #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("prompt.md").path))
+            #expect(try Data(contentsOf: configURL) == configBefore)
+            #expect(store.errorMessage == nil)
+        }
+    }
+
+    @Test func vocabularyListMatchesCleanupInstructions() throws {
+        try withStore { store, directory in
+            try Data("  # Names\r\n Ollie \r\nOllie\n\n\tCodex\t\n".utf8)
+                .write(to: directory.appendingPathComponent("vocab.txt"))
+            store.refresh()
+            let prompt = try #require(store.promptSnapshot(for: .codex))
+            let instructions = try Prompts.instructions(at: prompt.url, directoryURL: directory)
+            #expect(store.vocabulary == ["Ollie", "Codex"])
+            #expect(instructions.vocabularyCount == store.vocabulary.count)
+            #expect(instructions.text.hasSuffix("- Ollie\n- Codex\n"))
+        }
+    }
+
+    @Test func historyTimestampsRoundTripAndAcceptLegacySeconds() throws {
+        let date = Date(timeIntervalSince1970: 1_700_000_000.125)
+        let timestamp = HistoryTimestamp.format.format(date)
+        let decoded = try #require(HistoryTimestamp.date(from: timestamp))
+        #expect(abs(decoded.timeIntervalSince(date)) < 0.001)
+        #expect(HistoryTimestamp.date(from: "2026-09-04T12:00:00Z") != nil)
+        #expect(HistoryTimestamp.date(from: "invalid") == nil)
+    }
+
 }
