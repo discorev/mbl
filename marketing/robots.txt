@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mbl.tools/sitemap.xml
