@@ -42,6 +42,9 @@ final class Updater {
 
         do {
             try sparkleUpdater.start()
+            // Releases are frequent at 0.x, so look for a new version at every
+            // launch instead of waiting for the scheduled interval to elapse.
+            sparkleUpdater.checkForUpdatesInBackground()
             return updater
         } catch {
             AppLog.write(

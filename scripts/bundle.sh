@@ -93,7 +93,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
     <key>SUEnableAutomaticChecks</key>
     <true/>
     <key>SUScheduledCheckInterval</key>
-    <integer>86400</integer>
+    <integer>3600</integer>
     <key>SUAutomaticallyUpdate</key>
     <false/>
 </dict>
