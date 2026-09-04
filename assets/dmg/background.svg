@@ -13,15 +13,11 @@
       <stop offset="0.75" stop-color="#6B5BFF"/>
       <stop offset="1" stop-color="#3FD6FF"/>
     </linearGradient>
-    <filter id="glow" x="-20%" y="-200%" width="140%" height="500%">
-      <feGaussianBlur stdDeviation="6"/>
-    </filter>
   </defs>
   <rect width="660" height="400" fill="url(#plate)"/>
 
-  <!-- Aurora rule across the foot of the window, glowing, like the HUD strand at rest. -->
-  <rect x="60" y="356" width="540" height="3" rx="1.5" fill="url(#aurora)" opacity="0.55" filter="url(#glow)"/>
-  <rect x="60" y="356" width="540" height="3" rx="1.5" fill="url(#aurora)"/>
+  <!-- Aurora rule flush with the bottom edge of the window. -->
+  <rect x="0" y="396" width="660" height="4" fill="url(#aurora)"/>
 
   <!-- Arrow from the app to Applications. Finder icons are 128pt centred at x=165 and x=495. -->
   <path d="M258 190 C 300 190, 360 190, 402 190" fill="none" stroke="#1B1B25" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
