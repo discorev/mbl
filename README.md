@@ -8,7 +8,7 @@ Hold right Option, talk, then release. mbl transcribes speech locally with NVIDI
 
 A cleanup pass removes ums, false starts and self-corrections, applies British spelling, and honours your vocabulary list. It uses a warm Codex app-server on your ChatGPT subscription with `gpt-5.6-luna` by default. If Codex is unavailable, an on-device Apple Foundation Models fallback keeps cleanup working offline.
 
-mbl types the result at your cursor with keyboard events. It never touches your clipboard. A draggable HUD shows a live preview and animated indicator while you talk, and remembers its position for each display layout.
+mbl types the result at your cursor with keyboard events. Dictation never touches your clipboard; the history window only copies text when you choose Copy text. A draggable HUD shows a live preview and animated indicator while you talk, and remembers its position for each display layout.
 
 ## Requirements
 
@@ -24,6 +24,8 @@ Build the executable with Swift Package Manager:
 ```sh
 swift build
 ```
+
+Run the persistence tests with `scripts/test.sh`. The script also prepares Sparkle’s framework for the SwiftPM test runner.
 
 Create an app bundle with:
 
@@ -82,7 +84,24 @@ Add names and terms to `~/.config/voice/vocab.txt`, one term per line. Blank lin
 
 Each utterance adds one line to `~/.config/voice/history.jsonl` with the raw and cleaned text, backend, and timings. Use it to tune your prompts.
 
-The menu bar menu can open the config folder, open the history file, and reset the HUD position.
+Choose **Open mbl** from the menu bar to open the companion window:
+
+- **History** searches recent dictations and shows the final text alongside the original transcript, cleanup backend, and timings. Copy text explicitly when you need it again.
+- **Vocabulary** adds or removes names and terms used during cleanup.
+- **Cleanup** selects Codex or on-device cleanup, configures the local fallback, and edits each backend’s instructions.
+- **Settings** changes the push-to-talk key, resets the dictation indicator, shows permission status, and configures automatic update downloads.
+
+Closing the window keeps dictation running in the menu bar without adding a persistent Dock icon. The sidebar shows the installed version. When an update is available, a small download button appears beside it; once downloaded, it becomes an install-and-restart button. Local builds without an update feed do not show update actions.
+
+The menu bar retains the version, update action, HUD reset, and Quit. You can still edit the configuration files directly; the window writes to these same files.
+
+For an isolated companion-window preview, run the debug executable with a temporary configuration directory:
+
+```sh
+VOICE_COMPANION_PREVIEW=1 VOICE_CONFIG_DIR=/tmp/mbl-preview .build/debug/Voice
+```
+
+This skips microphone, hotkey, model and updater startup. Set `VOICE_COMPANION_PREVIEW_UPDATE=available` or `downloaded` to inspect the update button; preview download/restart actions are simulated.
 
 ## How it works
 

@@ -31,6 +31,7 @@ let package = Package(
                     "-Xlinker", "@executable_path/../Frameworks"
                 ])
             ]
-        )
+        ),
+        .testTarget(name: "VoiceTests", dependencies: ["Voice"])
     ]
 )

@@ -1,6 +1,8 @@
 import Foundation
 
-struct HistoryEntry: Encodable, Sendable {
+struct HistoryEntry: Codable, Identifiable, Sendable {
+    var id: String { ts + "|" + raw }
+
     private enum CodingKeys: String, CodingKey {
         case ts
         case audioSeconds

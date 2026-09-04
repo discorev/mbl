@@ -34,6 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var configWatcher: ConfigWatcher?
     private var currentConfig: Config?
     private var updater: Updater?
+    private var companionStore: CompanionStore?
+    private var companionWindow: CompanionWindowController?
+    private var isCompanionPreview = false
     private var updateMenuItem: NSMenuItem?
     private var updateState = Updater.State.idle
     private var selfTestTask: Task<Void, Never>?
@@ -44,6 +47,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let environment = ProcessInfo.processInfo.environment
+        if environment["VOICE_COMPANION_PREVIEW"] == "1" {
+            isCompanionPreview = true
+            switch environment["VOICE_COMPANION_PREVIEW_UPDATE"] {
+            case "available": updateState = .available(version: "Preview")
+            case "downloaded": updateState = .ready
+            default: updateState = .idle
+            }
+            openCompanionWindow()
+            return
+        }
         let selfTestPath = environment["VOICE_SELFTEST"]
             .flatMap { $0.isEmpty ? nil : $0 }
         let cleanerTestText = environment["VOICE_CLEANTEST"]
@@ -101,6 +114,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let cleaner {
             Task { await cleaner.shutdown() }
         }
+    }
+
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        openCompanionWindow()
+        return true
     }
 
     private func loadConfig() -> Config {
@@ -164,6 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         updater?.autoDownload = config.autoDownloadUpdates
         self.currentConfig = config
+        companionStore?.refresh()
         AppLog.write("config reloaded")
     }
 
@@ -204,6 +226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updater.onStateChange = { [weak self] state in
             guard let self else { return }
             self.updateState = state
+            self.companionWindow?.updateState = state
             self.updateUpdateMenuItem(for: state)
             self.updateStatusIcon()
         }
@@ -398,6 +421,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(versionItem)
         menu.addItem(.separator())
 
+        let openItem = NSMenuItem(
+            title: "Open mbl",
+            action: #selector(openCompanionWindow),
+            keyEquivalent: ""
+        )
+        openItem.target = self
+        menu.addItem(openItem)
+        menu.addItem(.separator())
+
         if updater != nil {
             let updateItem = NSMenuItem(
                 title: "",
@@ -419,21 +451,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         resetItem.target = self
         menu.addItem(resetItem)
 
-        let configItem = NSMenuItem(
-            title: "Open config folder",
-            action: #selector(openConfigFolder),
-            keyEquivalent: ""
-        )
-        configItem.target = self
-        menu.addItem(configItem)
-
-        let historyItem = NSMenuItem(
-            title: "Open history",
-            action: #selector(openHistory),
-            keyEquivalent: ""
-        )
-        historyItem.target = self
-        menu.addItem(historyItem)
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
@@ -636,25 +653,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc
-    private func openConfigFolder() {
-        do {
-            try FileManager.default.createDirectory(
-                at: Config.directoryURL,
-                withIntermediateDirectories: true
+    private func openCompanionWindow() {
+        if companionWindow == nil {
+            configureMainMenu()
+            let store = CompanionStore()
+            companionStore = store
+            companionWindow = CompanionWindowController(
+                store: store,
+                onResetHUD: { [weak self] in self?.resetHUDPosition() },
+                onUpdateAction: { [weak self] in self?.performCompanionUpdateAction() }
             )
-            NSWorkspace.shared.open(Config.directoryURL)
-        } catch {
-            AppLog.write("Unable to open config folder: \(error.localizedDescription)")
         }
+        companionWindow?.updateState = updateState
+        companionWindow?.updaterAvailable = updater != nil || isCompanionPreview
+        companionStore?.refresh()
+        companionWindow?.show()
     }
 
-    @objc
-    private func openHistory() {
-        do {
-            try History.ensureFileExists()
-            NSWorkspace.shared.activateFileViewerSelecting([History.fileURL])
-        } catch {
-            AppLog.write("Unable to open history: \(error.localizedDescription)")
+    private func configureMainMenu() {
+        let mainMenu = NSMenu()
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu(title: "mbl")
+        let quitItem = NSMenuItem(
+            title: "Quit mbl", action: #selector(quit), keyEquivalent: "q"
+        )
+        quitItem.target = self
+        appMenu.addItem(quitItem)
+        appItem.submenu = appMenu
+        mainMenu.addItem(appItem)
+
+        let editItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        let redoItem = editMenu.addItem(
+            withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z"
+        )
+        redoItem.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = editMenu
+        mainMenu.addItem(editItem)
+
+        let windowItem = NSMenuItem()
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(
+            withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"
+        )
+        windowMenu.addItem(
+            withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"
+        )
+        windowItem.submenu = windowMenu
+        mainMenu.addItem(windowItem)
+        NSApplication.shared.mainMenu = mainMenu
+        NSApplication.shared.windowsMenu = windowMenu
+    }
+
+    private func performCompanionUpdateAction() {
+        if isCompanionPreview {
+            if case .available = updateState {
+                updateState = .ready
+                companionWindow?.updateState = updateState
+            }
+            return
+        }
+        switch updateState {
+        case .available:
+            downloadUpdate()
+        case .ready:
+            installAndRestart()
+        case .idle, .upToDate, .failed:
+            checkForUpdates()
+        case .checking, .downloading:
+            break
         }
     }
 

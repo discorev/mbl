@@ -16,17 +16,17 @@ enum HotkeyKey: String, Codable, Sendable {
 }
 
 struct Config: Codable, Equatable, Sendable {
-    let hotkey: HotkeyKey
-    let backend: CleanupBackend
-    let codexModel: String
-    let codexThreadMaxTurns: Int
-    let fallback: CleanupFallback
-    let minWordsForCleanup: Int
-    let cleanupTimeoutSeconds: Int
-    let previewTickMs: Int
-    let hudBottomInset: Int
-    let minInputVolume: Float
-    let autoDownloadUpdates: Bool
+    var hotkey: HotkeyKey
+    var backend: CleanupBackend
+    var codexModel: String
+    var codexThreadMaxTurns: Int
+    var fallback: CleanupFallback
+    var minWordsForCleanup: Int
+    var cleanupTimeoutSeconds: Int
+    var previewTickMs: Int
+    var hudBottomInset: Int
+    var minInputVolume: Float
+    var autoDownloadUpdates: Bool
 
     static let fallbackValue = Config(
         hotkey: .rightOption,
@@ -54,8 +54,10 @@ struct Config: Codable, Equatable, Sendable {
     }
 
     @MainActor
-    static func load(fileManager: FileManager = .default) throws -> Config {
-        let directory = directoryURL
+    static func load(
+        fileManager: FileManager = .default,
+        directoryURL directory: URL = Config.directoryURL
+    ) throws -> Config {
         try fileManager.createDirectory(
             at: directory,
             withIntermediateDirectories: true
