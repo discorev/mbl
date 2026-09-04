@@ -87,6 +87,35 @@ jobs:
           xcrun stapler staple build/mbl.app
           spctl --assess --type execute --verbose=4 build/mbl.app
 
+      - name: Build, notarize, and verify disk image
+        shell: bash
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          VOICE_RELEASE=1 scripts/make-dmg.sh
+          NOTARY_TEMP_DIR=$(mktemp -d "$RUNNER_TEMP/voice-dmg-notary.XXXXXX")
+          ASC_KEY_PATH="$NOTARY_TEMP_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          SUBMISSION_RESULT="$NOTARY_TEMP_DIR/submission.json"
+          trap 'rm -rf "$NOTARY_TEMP_DIR"' EXIT
+          printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+          SUBMIT_EXIT=0
+          xcrun notarytool submit "build/mbl-$VERSION.dmg" --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait --timeout 30m --output-format json > "$SUBMISSION_RESULT" || SUBMIT_EXIT=$?
+          cat "$SUBMISSION_RESULT"
+          SUBMISSION_ID=$(plutil -extract id raw -o - "$SUBMISSION_RESULT" 2>/dev/null || true)
+          SUBMISSION_STATUS=$(plutil -extract status raw -o - "$SUBMISSION_RESULT" 2>/dev/null || true)
+          if [ "$SUBMIT_EXIT" -ne 0 ] || [ "$SUBMISSION_STATUS" != "Accepted" ]; then
+            if [ -n "$SUBMISSION_ID" ]; then
+              xcrun notarytool log "$SUBMISSION_ID" --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" || true
+            fi
+            exit 1
+          fi
+          xcrun stapler staple "build/mbl-$VERSION.dmg"
+          spctl --assess --type open --context context:primary-signature -v "build/mbl-$VERSION.dmg"
+
       - name: Package release
         shell: bash
         run: ditto -c -k --keepParent build/mbl.app "build/mbl-$VERSION.zip"
@@ -119,6 +148,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            build/mbl-${{ env.VERSION }}.dmg
             build/mbl-${{ env.VERSION }}.zip
             build/appcast.xml
           name: ${{ github.ref_name }}

@@ -48,7 +48,7 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-The release workflow signs and notarizes the app, then publishes `mbl-X.Y.Z.zip` and `appcast.xml` on the GitHub Release. Move the unzipped app into Applications before first launch, otherwise macOS runs it from a read-only translocated path and in-app updates cannot install. Local builds do not self-update.
+The release workflow signs and notarizes the app, then publishes `mbl-X.Y.Z.dmg` for people, plus `mbl-X.Y.Z.zip` and `appcast.xml` for in-app updates. Drag mbl to Applications from the disk image before first launch, otherwise macOS runs it from a read-only translocated path and in-app updates cannot install. Local builds do not self-update.
 
 The following secrets live in the GitHub `release` environment, which is restricted to `v*` tags:
 
