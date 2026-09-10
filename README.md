@@ -13,111 +13,30 @@ mbl types the result at your cursor with keyboard events. Dictation never touche
 ## Requirements
 
 - An Apple Silicon Mac running macOS 26 or later.
-- A Swift 6.4 toolchain from Xcode or the Command Line Tools.
 - The `codex` CLI installed and logged in, if you want Codex cleanup. Without it, mbl uses the local model.
 - Apple Intelligence enabled, if you want the local cleanup fallback.
 
-## Build and run
+## Install
 
-Build the executable with Swift Package Manager:
+1. Download `mbl-X.Y.Z.dmg` from the [latest release](https://github.com/discorev/mbl/releases/latest).
+2. Open the disk image and drag mbl to Applications. Launch it from there, not from the disk image, otherwise macOS runs it from a read-only path and in-app updates cannot install.
+3. Open mbl and grant Microphone, Input Monitoring, and Accessibility access when macOS prompts you. Input Monitoring enables the hotkey, and Accessibility enables typing.
 
-```sh
-swift build
-```
+To build from source instead, see [docs/build.md](docs/build.md).
 
-Run the persistence tests with `scripts/test.sh`. The script also prepares Sparkle’s framework for the SwiftPM test runner.
+## Using mbl
 
-Create an app bundle with:
-
-```sh
-scripts/bundle.sh
-```
-
-The script writes `build/mbl.app` and signs it with the first Apple Development identity in your keychain. If no identity is available, it exits with an error so rebuilding cannot silently invalidate macOS privacy grants. You can select a specific identity with `VOICE_SIGN_IDENTITY`, or deliberately permit an ad-hoc signature with `VOICE_ALLOW_ADHOC_SIGNING=1 scripts/bundle.sh`. The bundle version defaults to `0.0.0`; set `VOICE_VERSION` to write both app version fields. Set `VOICE_RELEASE=1` to use the first Developer ID Application identity, enable the hardened runtime, and add the Sparkle release feed; `VOICE_SIGN_IDENTITY` still overrides the selected identity.
-
-Open the app and grant Microphone, Input Monitoring, and Accessibility access when macOS prompts you. Input Monitoring enables the hotkey, and Accessibility enables typing.
-
-A stable Apple Development identity matters because an ad-hoc signature loses its Accessibility grant on every rebuild.
-
-The app icon is committed as `assets/icon/Voice.icns` and `assets/icon/Assets.car`. Run `scripts/make-icon.sh` to regenerate both from `assets/icon/mbl.svg`; it needs Xcode for `actool`.
-
-## Releases
-
-Create and push a version tag:
-
-```sh
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
-
-The release workflow signs and notarizes the app, then publishes `mbl-X.Y.Z.dmg` for people, plus `mbl-X.Y.Z.zip` and `appcast.xml` for in-app updates. Drag mbl to Applications from the disk image before first launch, otherwise macOS runs it from a read-only translocated path and in-app updates cannot install. Local builds do not self-update.
-
-The following secrets live in the GitHub `release` environment, which is restricted to `v*` tags:
-
-- `DEVID_P12_BASE64`
-- `DEVID_P12_PASSWORD`
-- `ASC_KEY_ID`
-- `ASC_ISSUER_ID`
-- `ASC_KEY_P8`
-
-## Configuration
-
-mbl creates `~/.config/voice/config.json` on first launch. Changes to this file are picked up automatically while mbl runs.
-
-| Key | Default | Purpose |
-| --- | --- | --- |
-| `hotkey` | `rightOption` | Push-to-talk key: `rightOption` or `rightControl`. |
-| `backend` | `codex` | Primary cleanup backend: `codex` or `local`. |
-| `codexModel` | `gpt-5.6-luna` | Model used by Codex. |
-| `codexThreadMaxTurns` | `50` | Cleanup turns before rotating the warm thread. |
-| `fallback` | `local` | Behaviour after Codex fails: `local` or `none`. |
-| `minWordsForCleanup` | `4` | Shorter transcripts skip cleanup. |
-| `cleanupTimeoutSeconds` | `6` | Codex cleanup timeout. |
-| `previewTickMs` | `500` | Live preview interval in milliseconds. |
-| `hudBottomInset` | `80` | Default HUD distance from the bottom of the display. |
-| `minInputVolume` | `0.5` | Input level below which the HUD warns you. |
-| `autoDownloadUpdates` | `false` | Download updates as soon as they are found; installing still needs a click. |
-
-Cleanup prompts live in `~/.config/voice/prompts/<model>.md`. The supplied files are `5-6-luna.md` and `macos-26.md`. You can edit them while mbl is running; the changes apply without a restart.
-
-Names, terms and replacement rules live together in `~/.config/voice/vocab.json`. Edit them using the **Vocabulary** and **Replacements** pages or directly in the file.
-
-For example:
-
-```json
-{
-  "terms": ["Ollie", "mbl"],
-  "replacements": [
-    { "phrase": "the github repo", "replacement": "https://github.com/discorev/mbl/" }
-  ]
-}
-```
-
-Existing `vocab.txt` terms are migrated automatically into `vocab.json`. Blank lines and comments are ignored; terms are deduplicated when merging. After the JSON is saved successfully, `vocab.txt` is deleted. Invalid files are reported without overwriting them.
-
-Replacements apply after cleanup and also to short dictations or raw fallback output. Matching ignores case, respects word boundaries, and treats phrases literally. At each match, the longest phrase wins; inserted text is never replaced again. An empty replacement removes the phrase. Changes apply to the next dictation without restarting. These rules match the final text, so add the wording that appears in history for recurring mistakes.
-
-Each utterance adds one line to `~/.config/voice/history.jsonl` with the raw and cleaned text, backend, and timings. Use it to tune your prompts.
+mbl lives in the menu bar. Hold right Option, speak, and release. The HUD shows a live preview while you hold the key and warns you if the input level is too low. Drag the HUD to move it; its position is remembered per display layout.
 
 Choose **Open mbl** from the menu bar to open the companion window:
 
 - **History** searches recent dictations and shows the final text alongside the original transcript, cleanup backend, and timings. Copy text explicitly when you need it again.
 - **Vocabulary** adds or removes names and terms used during cleanup.
-- **Replacements** adds or removes exact phrase substitutions for links, shortcuts and recurring mistakes.
-- **Cleanup** selects Codex or on-device cleanup, configures the local fallback, and edits each backend’s instructions.
+- **Replacements** adds or removes exact phrase substitutions for links, shortcuts and recurring mistakes. Rules match the final text, so add the wording that appears in history.
+- **Cleanup** selects Codex or on-device cleanup, configures the local fallback, and edits each backend's instructions.
 - **Settings** changes the push-to-talk key, resets the dictation indicator, shows permission status, and configures automatic update downloads.
 
-Closing the window keeps dictation running in the menu bar without adding a persistent Dock icon. The sidebar shows the installed version. When an update is available, a small download button appears beside it; once downloaded, it becomes an install-and-restart button. Local builds without an update feed do not show update actions.
-
-The menu bar retains the version, update action, HUD reset, and Quit. Use **Open config folder** in Settings to access settings, prompts, vocabulary and history. You can edit these files directly; the window writes to these same files.
-
-For an isolated companion-window preview, run the debug executable with a temporary configuration directory:
-
-```sh
-VOICE_COMPANION_PREVIEW=1 VOICE_CONFIG_DIR=/tmp/mbl-preview .build/debug/Voice
-```
-
-This skips microphone, hotkey, model and updater startup. Set `VOICE_COMPANION_PREVIEW_UPDATE=available` or `downloaded` to inspect the update button; preview download/restart actions are simulated.
+Closing the window keeps dictation running in the menu bar without adding a persistent Dock icon. Everything the window edits is stored as plain files under `~/.config/voice`; use **Open config folder** in Settings to reach them. See [docs/configuration.md](docs/configuration.md) for the file formats.
 
 ## How it works
 
@@ -127,7 +46,7 @@ This skips microphone, hotkey, model and updater startup. Set `VOICE_COMPANION_P
 4. Clean the transcript with Codex, or with the local model when needed.
 5. Apply configured text replacements, then type the result at the cursor with keyboard events.
 
-The Codex app-server keeps a warm cleanup thread. mbl rotates it after the configured number of turns, or when the prompt or vocabulary changes.
+The Codex app-server keeps a warm cleanup thread. mbl rotates it after a configured number of turns, or when the prompt or vocabulary changes.
 
 ## Status
 

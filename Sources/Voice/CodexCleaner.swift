@@ -85,6 +85,7 @@ actor CodexCleaner: Cleaner {
                         "text": .string(Prompts.dictationInput(raw)),
                     ]),
                 ]),
+                // Lowest accepted value; luna rejects "minimal" with unsupported_value.
                 "effort": .string("none"),
             ])
         )
@@ -246,6 +247,8 @@ actor CodexCleaner: Cleaner {
                 "sandbox": .string("read-only"),
                 "ephemeral": .bool(true),
                 "dynamicTools": .array([]),
+                // No thread or turn field disables Codex's built-in tools or user MCP
+                // servers; only the developer instructions keep the model from using them.
                 "developerInstructions": .string(instructions.text),
             ])
         )
