@@ -69,12 +69,14 @@ final class DictationController {
         latestPreviewText = ""
         isHolding = true
         onListeningChanged(true)
-        hud.show(state: .listening)
         AppLog.write("hold")
 
+        // Open the mic before showing the HUD: its appearance is the cue to
+        // start talking, so audio must already be flowing when it lands.
         do {
             try recorder.start()
             isRecording = true
+            hud.show(state: .listening)
             checkInputVolume()
             startPreviewTimer()
             startLevelTimer()
@@ -83,7 +85,7 @@ final class DictationController {
             isRecording = false
             onListeningChanged(false)
             AppLog.write("unable to start recording: \(error.localizedDescription)")
-            hud.update(state: .done, text: "Microphone unavailable")
+            hud.show(state: .done, text: "Microphone unavailable")
             hud.dismissAfterPaste()
         }
     }
