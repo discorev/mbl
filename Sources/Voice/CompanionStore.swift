@@ -99,7 +99,10 @@ final class CompanionStore {
                 for (index, line) in lines.enumerated() {
                     guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
                     do {
-                        entries.append(try JSONDecoder().decode(HistoryEntry.self, from: Data(line.utf8)))
+                        let entry = try JSONDecoder().decode(HistoryEntry.self, from: Data(line.utf8))
+                        // Empty transcripts stay in the file for diagnostics but are not worth showing.
+                        guard !entry.raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+                        entries.append(entry)
                     } catch {
                         if index != lines.count - 1 || text.hasSuffix("\n") { invalid += 1 }
                     }

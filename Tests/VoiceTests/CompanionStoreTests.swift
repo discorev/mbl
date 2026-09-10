@@ -84,6 +84,20 @@ struct CompanionStoreTests {
         }
     }
 
+    @Test func historyHidesEmptyTranscriptsButKeepsThemOnDisk() throws {
+        try withStore { store, directory in
+            let url = directory.appendingPathComponent("history.jsonl")
+            let empty = #"{"ts":"2026-09-04T12:00:00Z","audioSeconds":1,"raw":" ","backend":"raw","fallback":false,"transcribeMs":20}"#
+            let spoken = #"{"ts":"2026-09-04T12:00:01Z","audioSeconds":1,"raw":"hello","backend":"raw","fallback":false,"transcribeMs":20}"#
+            let bytes = Data((empty + "\n" + spoken + "\n").utf8)
+            try bytes.write(to: url)
+            store.refresh()
+            #expect(store.history.map(\.raw) == ["hello"])
+            #expect(store.errorMessage == nil)
+            #expect(try Data(contentsOf: url) == bytes)
+        }
+    }
+
     @Test func deletingHistoryPreservesUnloadedEntriesAndOriginalBytes() throws {
         try withStore { store, directory in
             let url = directory.appendingPathComponent("history.jsonl")
