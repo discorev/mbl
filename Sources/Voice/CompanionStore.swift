@@ -258,6 +258,9 @@ final class CompanionStore {
     }
 
     private static func validate(_ value: Config) throws {
+        if let message = value.hotkey.validationMessage {
+            throw CompanionStoreError.invalid("Push-to-talk shortcut: \(message.lowercased()).")
+        }
         guard !value.codexModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !value.codexModel.contains("/"), !value.codexModel.contains("\\"),
               value.codexThreadMaxTurns > 0, value.minWordsForCleanup >= 0,

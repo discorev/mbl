@@ -31,6 +31,17 @@ struct Shortcut: Codable, Equatable, Sendable {
         return modifierText + " " + Self.keyName(for: keyCode)
     }
 
+    /// Arrows, F-keys and navigation keys carry the Fn flag on their own.
+    static func isFunctionKey(_ keyCode: Int64) -> Bool {
+        functionKeyCodes.contains(keyCode)
+    }
+
+    private static let functionKeyCodes: Set<Int64> = [
+        123, 124, 125, 126, 115, 119, 116, 121, 117,
+        122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111,
+        105, 107, 113, 106, 64, 79, 80, 90,
+    ]
+
     private static func keyName(for keyCode: Int64) -> String {
         if let fixed = fixedKeyNames[keyCode] {
             return fixed

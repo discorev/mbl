@@ -101,7 +101,10 @@ struct ShortcutRecorder: View {
         }
 
         didPressKey = true
-        let modifiers = genericModifiers(from: event.modifierFlags)
+        let modifiers = genericModifiers(
+            from: event.modifierFlags,
+            keyCode: Int64(event.keyCode)
+        )
         guard !modifiers.isEmpty else {
             state = .invalid("Add a modifier like ⌥ or ⌃")
             return
@@ -150,14 +153,21 @@ struct ShortcutRecorder: View {
         validateAndSave(Shortcut(modifiers: modifiers, keyCode: nil))
     }
 
-    private func genericModifiers(from flags: NSEvent.ModifierFlags) -> [Modifier] {
+    private func genericModifiers(
+        from flags: NSEvent.ModifierFlags,
+        keyCode: Int64
+    ) -> [Modifier] {
         let flags = flags.intersection(.deviceIndependentFlagsMask)
         var modifiers: [Modifier] = []
         if flags.contains(.control) { modifiers.append(.control) }
         if flags.contains(.option) { modifiers.append(.option) }
         if flags.contains(.shift) { modifiers.append(.shift) }
         if flags.contains(.command) { modifiers.append(.command) }
-        if flags.contains(.function) { modifiers.append(.fn) }
+        // AppKit sets .function for arrows, F-keys and navigation keys even
+        // when Fn is not held, so only count it as a modifier for other keys.
+        if flags.contains(.function), !Shortcut.isFunctionKey(keyCode) {
+            modifiers.append(.fn)
+        }
         return modifiers
     }
 
