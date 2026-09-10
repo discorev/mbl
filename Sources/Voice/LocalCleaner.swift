@@ -54,7 +54,7 @@ struct LocalCleaner: Cleaner {
         }
         let session = LanguageModelSession(instructions: instructions.text)
         let response = try await session.respond(
-            to: raw,
+            to: Prompts.dictationInput(raw),
             options: GenerationOptions(temperature: 0)
         )
         let cleaned = postProcess(response.content)

@@ -82,7 +82,7 @@ actor CodexCleaner: Cleaner {
                 "input": .array([
                     .object([
                         "type": .string("text"),
-                        "text": .string(raw),
+                        "text": .string(Prompts.dictationInput(raw)),
                     ]),
                 ]),
                 "effort": .string("none"),

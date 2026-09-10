@@ -1,6 +1,11 @@
 import Foundation
 
 enum Prompts {
+    /// Mark each recording as text to clean, rather than a request to act on.
+    static func dictationInput(_ raw: String) -> String {
+        "<dictation>\(raw)</dictation>"
+    }
+
     struct Instructions: Sendable {
         let text: String
         let vocabularyCount: Int
