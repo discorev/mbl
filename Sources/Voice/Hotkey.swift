@@ -3,25 +3,10 @@ import Foundation
 
 private let escapeKeyCode: Int64 = 53
 
-private extension HotkeyKey {
-    var keyCode: Int64 {
-        switch self {
-        case .rightOption: 61
-        case .rightControl: 62
-        }
-    }
-
-    var deviceFlag: CGEventFlags {
-        switch self {
-        case .rightOption: CGEventFlags(rawValue: 0x00000040)
-        case .rightControl: CGEventFlags(rawValue: 0x00002000)
-        }
-    }
-}
-
 @MainActor
 final class Hotkey {
-    private let key: HotkeyKey
+    private let shortcut: Shortcut
+    private var matcher: ShortcutMatcher
     private let onHold: () -> Void
     private let onRelease: () -> Void
     private let onCancel: () -> Void
@@ -29,16 +14,19 @@ final class Hotkey {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var isHeld = false
+    private var isPaused = false
+    private var isCancelledHold = false
 
     init(
-        key: HotkeyKey,
+        shortcut: Shortcut,
+        matcher: ShortcutMatcher,
         onHold: @escaping () -> Void,
         onRelease: @escaping () -> Void,
         onCancel: @escaping () -> Void,
         onUserKeyDown: @escaping (Int64) -> Void = { _ in }
     ) {
-        self.key = key
+        self.shortcut = shortcut
+        self.matcher = matcher
         self.onHold = onHold
         self.onRelease = onRelease
         self.onCancel = onCancel
@@ -48,11 +36,12 @@ final class Hotkey {
     func start() {
         let eventMask = (CGEventMask(1) << CGEventType.flagsChanged.rawValue)
             | (CGEventMask(1) << CGEventType.keyDown.rawValue)
+            | (CGEventMask(1) << CGEventType.keyUp.rawValue)
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .listenOnly,
+            options: .defaultTap,
             eventsOfInterest: eventMask,
             callback: hotkeyEventCallback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
@@ -70,7 +59,7 @@ final class Hotkey {
 
         eventTap = tap
         runLoopSource = source
-        AppLog.write("hotkey listener started: \(key.rawValue)")
+        AppLog.write("hotkey listener started: \(shortcut.displayString)")
     }
 
     func stop() {
@@ -82,35 +71,81 @@ final class Hotkey {
         }
         runLoopSource = nil
         eventTap = nil
-        isHeld = false
+        matcher.reset()
+        isCancelledHold = false
+    }
+
+    func pause() {
+        guard !isPaused else {
+            return
+        }
+        isPaused = true
+        if matcher.isHeld, !isCancelledHold {
+            onCancel()
+        }
+        matcher.reset()
+        isCancelledHold = false
+    }
+
+    func resume() {
+        isPaused = false
     }
 
     fileprivate func receive(
         type: CGEventType,
         keyCode: Int64,
-        flags: CGEventFlags
-    ) {
-        if type == .flagsChanged, keyCode == key.keyCode {
-            let isPressed = flags.contains(key.deviceFlag)
-            if isPressed, !isHeld {
-                isHeld = true
-                onHold()
-            } else if !isPressed, isHeld {
-                isHeld = false
+        flags: CGEventFlags,
+        isAutorepeat: Bool
+    ) -> Bool {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if let eventTap {
+                CGEvent.tapEnable(tap: eventTap, enable: true)
+            }
+            return false
+        }
+
+        guard !isPaused else {
+            return false
+        }
+
+        if type == .keyDown,
+           keyCode == escapeKeyCode,
+           matcher.isHeld,
+           shortcut.keyCode != escapeKeyCode {
+            if !isCancelledHold {
+                isCancelledHold = true
+                onCancel()
+            }
+            return false
+        }
+
+        let result = matcher.receive(
+            type: type,
+            keyCode: keyCode,
+            flags: flags,
+            isAutorepeat: isAutorepeat
+        )
+        switch result.event {
+        case .hold:
+            isCancelledHold = false
+            onHold()
+        case .release:
+            if isCancelledHold {
+                isCancelledHold = false
+            } else {
                 onRelease()
             }
-            return
+        case .none:
+            break
         }
 
-        if type == .keyDown, keyCode == escapeKeyCode, isHeld {
-            isHeld = false
-            onCancel()
-            return
-        }
-
-        if type == .keyDown, !isHeld, Self.isTypingKey(keyCode, flags: flags) {
+        if type == .keyDown,
+           !matcher.isHeld,
+           !result.swallow,
+           Self.isTypingKey(keyCode, flags: flags) {
             onUserKeyDown(keyCode)
         }
+        return result.swallow
     }
 
     /// Escape, arrows, function keys and app shortcuts move focus or the
@@ -133,7 +168,7 @@ final class Hotkey {
 }
 
 private func hotkeyEventCallback(
-    proxy: CGEventTapProxy,
+    proxy _: CGEventTapProxy,
     type: CGEventType,
     event: CGEvent,
     userInfo: UnsafeMutableRawPointer?
@@ -145,12 +180,14 @@ private func hotkeyEventCallback(
     let hotkey = Unmanaged<Hotkey>.fromOpaque(userInfo).takeUnretainedValue()
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
     let flags = event.flags
-    MainActor.assumeIsolated {
+    let isAutorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+    let swallow = MainActor.assumeIsolated {
         hotkey.receive(
             type: type,
             keyCode: keyCode,
-            flags: flags
+            flags: flags,
+            isAutorepeat: isAutorepeat
         )
     }
-    return Unmanaged.passUnretained(event)
+    return swallow ? nil : Unmanaged.passUnretained(event)
 }

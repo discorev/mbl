@@ -249,7 +249,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureHotkey(config: Config) {
         let hotkey = Hotkey(
-            key: config.hotkey,
+            shortcut: config.hotkey,
+            matcher: ShortcutMatcher(shortcut: config.hotkey),
             onHold: { [weak self] in self?.dictation?.hold() },
             onRelease: { [weak self] in self?.dictation?.release() },
             onCancel: { [weak self] in self?.dictation?.cancel() },
@@ -674,6 +675,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             companionWindow = CompanionWindowController(
                 store: store,
                 onResetHUD: { [weak self] in self?.resetHUDPosition() },
+                onShortcutRecordingChanged: { [weak self] recording in
+                    if recording { self?.hotkey?.pause() }
+                    else { self?.hotkey?.resume() }
+                },
                 onUpdateAction: { [weak self] in self?.performCompanionUpdateAction() }
             )
         }

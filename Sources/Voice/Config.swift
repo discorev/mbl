@@ -10,13 +10,8 @@ enum CleanupFallback: String, Codable, Sendable {
     case none
 }
 
-enum HotkeyKey: String, Codable, Sendable {
-    case rightOption
-    case rightControl
-}
-
 struct Config: Codable, Equatable, Sendable {
-    var hotkey: HotkeyKey
+    var hotkey: Shortcut
     var backend: CleanupBackend
     var codexModel: String
     var codexThreadMaxTurns: Int
@@ -29,7 +24,7 @@ struct Config: Codable, Equatable, Sendable {
     var autoDownloadUpdates: Bool
 
     static let fallbackValue = Config(
-        hotkey: .rightOption,
+        hotkey: .defaultValue,
         backend: .codex,
         codexModel: "gpt-5.6-luna",
         codexThreadMaxTurns: 50,
@@ -66,6 +61,7 @@ struct Config: Codable, Equatable, Sendable {
         let configURL = directory.appendingPathComponent("config.json")
 
         try writeIfMissing(defaultConfigJSON, to: configURL, fileManager: fileManager)
+        try upgradeLegacyHotkey(at: configURL)
         let data = try Data(contentsOf: configURL)
         let config = try JSONDecoder().decode(Config.self, from: data)
         try Prompts.prepare(
@@ -77,7 +73,7 @@ struct Config: Codable, Equatable, Sendable {
     }
 
     init(
-        hotkey: HotkeyKey,
+        hotkey: Shortcut,
         backend: CleanupBackend,
         codexModel: String,
         codexThreadMaxTurns: Int,
@@ -104,7 +100,7 @@ struct Config: Codable, Equatable, Sendable {
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        hotkey = try container.decode(HotkeyKey.self, forKey: .hotkey)
+        hotkey = try container.decode(Shortcut.self, forKey: .hotkey)
         backend = try container.decode(CleanupBackend.self, forKey: .backend)
         codexModel = try container.decode(String.self, forKey: .codexModel)
         codexThreadMaxTurns = try container.decode(Int.self, forKey: .codexThreadMaxTurns)
@@ -130,6 +126,25 @@ struct Config: Codable, Equatable, Sendable {
         }
     }
 
+    // Remove before v1.0: migrates the pre-0.8 string hotkey.
+    private static func upgradeLegacyHotkey(at url: URL) throws {
+        let data = try Data(contentsOf: url)
+        guard
+            var object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let legacy = object["hotkey"] as? String,
+            legacy == "rightOption" || legacy == "rightControl"
+        else {
+            return
+        }
+
+        object["hotkey"] = ["modifiers": [legacy]]
+        let migrated = try JSONSerialization.data(
+            withJSONObject: object,
+            options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        )
+        try migrated.write(to: url, options: .atomic)
+    }
+
     private static func writeIfMissing(
         _ contents: String,
         to url: URL,
@@ -143,7 +158,11 @@ struct Config: Codable, Equatable, Sendable {
 
     private static let defaultConfigJSON = """
     {
-      "hotkey": "rightOption",
+      "hotkey": {
+        "modifiers": [
+          "rightOption"
+        ]
+      },
       "backend": "codex",
       "codexModel": "gpt-5.6-luna",
       "codexThreadMaxTurns": 50,

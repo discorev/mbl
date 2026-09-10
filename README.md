@@ -34,7 +34,7 @@ Choose **Open mbl** from the menu bar to open the companion window:
 - **Vocabulary** adds or removes names and terms used during cleanup.
 - **Replacements** adds or removes exact phrase substitutions for links, shortcuts and recurring mistakes. Rules match the final text, so add the wording that appears in history.
 - **Cleanup** selects Codex or on-device cleanup, configures the local fallback, and edits each backend's instructions.
-- **Settings** changes the push-to-talk key, resets the dictation indicator, shows permission status, and configures automatic update downloads.
+- **Settings** records a new push-to-talk shortcut, resets the dictation indicator, shows permission status, and configures automatic update downloads.
 
 Closing the window keeps dictation running in the menu bar without adding a persistent Dock icon. Everything the window edits is stored as plain files under `~/.config/voice`; use **Open config folder** in Settings to reach them. See [docs/configuration.md](docs/configuration.md) for the file formats.
 
