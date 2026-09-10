@@ -370,6 +370,9 @@ final class AuroraView: NSView {
         switch state {
         case .listening:
             Target(wave: 1, orbit: 0, sweep: 0)
+        case .secureInput:
+            // Flat, still strands: the mic is closed and nothing is heard.
+            Target(wave: 0, orbit: 0, sweep: 0)
         case .transcribing:
             Target(wave: 0, orbit: 0, sweep: 1)
         case .cleaning:

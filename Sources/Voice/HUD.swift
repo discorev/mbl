@@ -7,6 +7,7 @@ enum HUDState: String {
     case cleaning
     case done
     case cleanedLocally = "cleaned locally"
+    case secureInput = "secure field"
 }
 
 @MainActor

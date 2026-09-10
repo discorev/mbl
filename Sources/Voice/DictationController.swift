@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import Foundation
 
 @MainActor
@@ -21,6 +22,7 @@ final class DictationController {
     private var modelsReady = false
     private var isHolding = false
     private var isRecording = false
+    private var isBlockedBySecureInput = false
     private var utteranceID = 0
     private var finalTaskGeneration = 0
     private var latestPreviewText = ""
@@ -65,6 +67,16 @@ final class DictationController {
         finalTask?.cancel()
         reloadConfig()
 
+        // Password fields turn on secure event input. Never record there:
+        // the transcript would be typed in plain text and kept in history.
+        if IsSecureEventInputEnabled() {
+            isHolding = true
+            isBlockedBySecureInput = true
+            AppLog.write("hold: secure input active, dictation disabled")
+            hud.show(state: .secureInput, text: Self.secureInputMessage)
+            return
+        }
+
         utteranceID += 1
         latestPreviewText = ""
         isHolding = true
@@ -96,6 +108,10 @@ final class DictationController {
         }
 
         isHolding = false
+        if dismissSecureInputNotice() {
+            return
+        }
+
         isRecording = false
         stopPreviewTimer()
         stopLevelTimer()
@@ -157,6 +173,10 @@ final class DictationController {
         }
 
         isHolding = false
+        if dismissSecureInputNotice() {
+            return
+        }
+
         isRecording = false
         stopPreviewTimer()
         stopLevelTimer()
@@ -186,6 +206,20 @@ final class DictationController {
         previewTask?.cancel()
         finalTask?.cancel()
         recorder.cancel()
+    }
+
+    private static let secureInputMessage =
+        "You're in a secure field, so transcription is disabled."
+
+    /// Returns true when the hold only showed the secure-field notice, so
+    /// release and cancel have nothing to stop beyond hiding the HUD.
+    private func dismissSecureInputNotice() -> Bool {
+        guard isBlockedBySecureInput else {
+            return false
+        }
+        isBlockedBySecureInput = false
+        hud.hide()
+        return true
     }
 
     private func reloadConfig() {

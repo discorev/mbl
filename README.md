@@ -26,7 +26,7 @@ To build from source instead, see [docs/build.md](docs/build.md).
 
 ## Using mbl
 
-mbl lives in the menu bar. Hold right Option, speak, and release. The HUD shows a live preview while you hold the key and warns you if the input level is too low. Drag the HUD to move it; its position is remembered per display layout.
+mbl lives in the menu bar. Hold right Option, speak, and release. The HUD shows a live preview while you hold the key and warns you if the input level is too low. While a password or other secure field has focus, holding the key shows a notice instead of recording. Drag the HUD to move it; its position is remembered per display layout.
 
 Choose **Open mbl** from the menu bar to open the companion window:
 
