@@ -77,11 +77,12 @@ final class CompanionWindowController: NSObject, NSWindowDelegate {
 }
 
 private enum CompanionPage: String, CaseIterable {
-    case history = "History", vocabulary = "Vocabulary", cleanup = "Cleanup", settings = "Settings"
+    case history = "History", vocabulary = "Vocabulary", replacements = "Replacements", cleanup = "Cleanup", settings = "Settings"
     var icon: String {
         switch self {
         case .history: "clock.arrow.circlepath"
         case .vocabulary: "book"
+        case .replacements: "arrow.left.arrow.right"
         case .cleanup: "wand.and.stars"
         case .settings: "slider.horizontal.3"
         }
@@ -90,6 +91,7 @@ private enum CompanionPage: String, CaseIterable {
         switch self {
         case .history: "Stored on this Mac"
         case .vocabulary: "Applies to future dictations"
+        case .replacements: "Exact text for familiar phrases"
         case .cleanup: "How your words are tidied"
         case .settings: "Changes apply automatically"
         }
@@ -121,6 +123,7 @@ private struct CompanionView: View {
                     switch page {
                     case .history: CompanionHistoryView(store: store)
                     case .vocabulary: CompanionVocabularyView(store: store)
+                    case .replacements: CompanionReplacementsView(store: store)
                     case .cleanup: CompanionCleanupView(store: store, state: state)
                     case .settings: CompanionSettingsView(store: store, updaterAvailable: state.updaterAvailable, onResetHUD: onResetHUD)
                     }
@@ -326,7 +329,7 @@ private struct CompanionVocabularyView: View {
                             HStack {
                                 Text(term).textSelection(.enabled)
                                 Spacer()
-                                Button { attempt { try store.removeWord(term) } } label: { Image(systemName: "xmark") }
+                                Button { attempt(reportingTo: store) { try store.removeWord(term) } } label: { Image(systemName: "xmark") }
                                     .buttonStyle(.plain).foregroundStyle(.secondary).help("Remove \(term)").accessibilityLabel("Remove \(term)")
                             }.padding(13)
                             if term != store.vocabulary.last { Divider() }
@@ -337,8 +340,56 @@ private struct CompanionVocabularyView: View {
             }.padding(28)
         }
     }
-    private func addWord() { attempt { try store.addWord(word); word = "" } }
-    private func attempt(_ action: () throws -> Void) { do { try action() } catch { store.errorMessage = error.localizedDescription } }
+    private func addWord() { attempt(reportingTo: store) { try store.addWord(word); word = "" } }
+}
+
+@MainActor
+private struct CompanionReplacementsView: View {
+    @Bindable var store: CompanionStore
+    @State private var phrase = ""
+    @State private var replacement = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                pageHeading("Say it your way.", subtitle: "Expand shortcuts into links or text, and fix recurring transcription mistakes.")
+                VStack(alignment: .leading, spacing: 10) {
+                    TextField("Phrase to replace, e.g. the github repo", text: $phrase)
+                        .accessibilityLabel("Phrase to replace")
+                    TextField("Replace with, e.g. https://github.com/discorev/mbl/", text: $replacement)
+                        .accessibilityLabel("Replacement text")
+                    Button("Add replacement", action: add).buttonStyle(.borderedProminent)
+                        .disabled(phrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }.textFieldStyle(.roundedBorder)
+                if store.replacements.isEmpty {
+                    Text("Add your first replacement above.").foregroundStyle(.secondary)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(store.replacements) { rule in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(rule.phrase).fontWeight(.medium)
+                                    Text(rule.replacement.isEmpty ? "(Remove phrase)" : rule.replacement)
+                                        .foregroundStyle(.secondary)
+                                }.textSelection(.enabled)
+                                Spacer()
+                                Button { attempt(reportingTo: store) { try store.removeReplacement(rule) } } label: { Image(systemName: "xmark") }
+                                    .buttonStyle(.plain).foregroundStyle(.secondary)
+                                    .help("Remove \(rule.phrase)").accessibilityLabel("Remove \(rule.phrase)")
+                            }.padding(13)
+                            if rule != store.replacements.last { Divider() }
+                        }
+                    }.background(.background, in: RoundedRectangle(cornerRadius: 9))
+                }
+                Text("Applied after cleanup, even when cleanup is skipped or unavailable. Matches ignore case and use whole words. Longer phrases win; replacements do not trigger other replacements. Leave the replacement empty to remove a phrase.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }.padding(28)
+        }
+    }
+
+    private func add() {
+        attempt(reportingTo: store) { try store.addReplacement(phrase: phrase, replacement: replacement); phrase = ""; replacement = "" }
+    }
 }
 
 @MainActor
@@ -466,7 +517,7 @@ private struct CompanionSettingsView: View {
                     Divider()
                     settingRow("Dictation indicator", subtitle: "Drag it anywhere on your screen.") { Button("Reset position", action: onResetHUD) }
                 }.background(.background, in: RoundedRectangle(cornerRadius: 9))
-                settingRow("Configuration files", subtitle: "Edit settings, prompts, vocabulary and history directly.") {
+                settingRow("Configuration files", subtitle: "Edit settings, prompts, vocabulary, replacements and history directly.") {
                     Button("Open config folder") { NSWorkspace.shared.open(store.directoryURL) }
                 }.background(.background, in: RoundedRectangle(cornerRadius: 9))
                 sectionLabel("Access")
@@ -501,6 +552,11 @@ private struct CompanionSettingsView: View {
         accessibility = AXIsProcessTrusted()
         inputMonitoring = CGPreflightListenEventAccess()
     }
+}
+
+@MainActor
+private func attempt(reportingTo store: CompanionStore, _ action: () throws -> Void) {
+    do { try action() } catch { store.errorMessage = error.localizedDescription }
 }
 
 private func pageHeading(_ title: String, subtitle: String) -> some View {

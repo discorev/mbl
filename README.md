@@ -80,7 +80,22 @@ mbl creates `~/.config/voice/config.json` on first launch. Changes to this file 
 
 Cleanup prompts live in `~/.config/voice/prompts/<model>.md`. The supplied files are `5-6-luna.md` and `macos-26.md`. You can edit them while mbl is running; the changes apply without a restart.
 
-Add names and terms to `~/.config/voice/vocab.txt`, one term per line. Blank lines and lines beginning with `#` are ignored.
+Names, terms and replacement rules live together in `~/.config/voice/vocab.json`. Edit them using the **Vocabulary** and **Replacements** pages or directly in the file.
+
+For example:
+
+```json
+{
+  "terms": ["Ollie", "mbl"],
+  "replacements": [
+    { "phrase": "the github repo", "replacement": "https://github.com/discorev/mbl/" }
+  ]
+}
+```
+
+Existing `vocab.txt` terms are migrated automatically into `vocab.json`. Blank lines and comments are ignored; terms are deduplicated when merging. After the JSON is saved successfully, `vocab.txt` is deleted. Invalid files are reported without overwriting them.
+
+Replacements apply after cleanup and also to short dictations or raw fallback output. Matching ignores case, respects word boundaries, and treats phrases literally. At each match, the longest phrase wins; inserted text is never replaced again. An empty replacement removes the phrase. Changes apply to the next dictation without restarting. These rules match the final text, so add the wording that appears in history for recurring mistakes.
 
 Each utterance adds one line to `~/.config/voice/history.jsonl` with the raw and cleaned text, backend, and timings. Use it to tune your prompts.
 
@@ -88,6 +103,7 @@ Choose **Open mbl** from the menu bar to open the companion window:
 
 - **History** searches recent dictations and shows the final text alongside the original transcript, cleanup backend, and timings. Copy text explicitly when you need it again.
 - **Vocabulary** adds or removes names and terms used during cleanup.
+- **Replacements** adds or removes exact phrase substitutions for links, shortcuts and recurring mistakes.
 - **Cleanup** selects Codex or on-device cleanup, configures the local fallback, and edits each backend’s instructions.
 - **Settings** changes the push-to-talk key, resets the dictation indicator, shows permission status, and configures automatic update downloads.
 
@@ -109,7 +125,7 @@ This skips microphone, hotkey, model and updater startup. Set `VOICE_COMPANION_P
 2. Run preview transcription every 500 ms while held. A speech gate skips previews during silence.
 3. Run the final transcription when you release the key.
 4. Clean the transcript with Codex, or with the local model when needed.
-5. Type the result at the cursor with keyboard events.
+5. Apply configured text replacements, then type the result at the cursor with keyboard events.
 
 The Codex app-server keeps a warm cleanup thread. mbl rotates it after the configured number of turns, or when the prompt or vocabulary changes.
 

@@ -8,6 +8,7 @@ final class CompanionStore {
     var config: Config = .fallbackValue
     var history: [HistoryEntry] = []
     var vocabulary: [String] = []
+    var replacements: [TextReplacement] = []
     var codexPrompt = ""
     var localPrompt = ""
     var errorMessage: String?
@@ -50,9 +51,6 @@ final class CompanionStore {
         var errors: [String] = []
         do {
             let configURL = directoryURL.appendingPathComponent("config.json")
-            if !FileManager.default.fileExists(atPath: directoryURL.appendingPathComponent("vocab.txt").path) {
-                fileSignatures[configURL] = nil
-            }
             try readIfChanged(at: configURL) {
                 config = try Config.load(directoryURL: directoryURL)
             }
@@ -62,11 +60,11 @@ final class CompanionStore {
             errors.append("Could not read settings: \(error.localizedDescription)")
         }
         do {
-            try readIfChanged(at: directoryURL.appendingPathComponent("vocab.txt")) {
-                vocabulary = Prompts.vocabularyTerms(in: try vocabularyText())
-            }
+            let value = try Vocabulary.load(directoryURL: directoryURL)
+            vocabulary = value.terms
+            replacements = value.replacements
         } catch {
-            errors.append("Could not read vocabulary: \(error.localizedDescription)")
+            errors.append("Could not read vocabulary or replacements: \(error.localizedDescription)")
         }
         for backend in [CleanupBackend.codex, .local] {
             do {
@@ -166,23 +164,49 @@ final class CompanionStore {
         guard !term.isEmpty, !term.hasPrefix("#"), !term.contains(where: \.isNewline) else {
             throw CompanionStoreError.invalid("Enter one vocabulary term on a single line.")
         }
-        var text = try vocabularyText()
-        guard !Prompts.vocabularyTerms(in: text).contains(where: { $0.caseInsensitiveCompare(term) == .orderedSame }) else { return }
-        if !text.isEmpty && !text.hasSuffix("\n") { text += "\n" }
-        text += term + "\n"
-        try Data(text.utf8).write(to: directoryURL.appendingPathComponent("vocab.txt"), options: .atomic)
-        vocabulary = Prompts.vocabularyTerms(in: text)
+        var value = try Vocabulary.load(directoryURL: directoryURL)
+        guard !value.terms.contains(where: { $0.caseInsensitiveCompare(term) == .orderedSame }) else { return }
+        value.terms.append(term)
+        try value.save(directoryURL: directoryURL)
+        vocabulary = value.terms
         errorMessage = nil
     }
 
     func removeWord(_ word: String) throws {
-        let text = try vocabularyText()
-        // Retain comments, whitespace and the order of all other terms.
-        let updated = text.components(separatedBy: "\n")
-            .filter { $0.trimmingCharacters(in: .whitespacesAndNewlines) != word }
-            .joined(separator: "\n")
-        try Data(updated.utf8).write(to: directoryURL.appendingPathComponent("vocab.txt"), options: .atomic)
-        vocabulary = Prompts.vocabularyTerms(in: updated)
+        var value = try Vocabulary.load(directoryURL: directoryURL)
+        value.terms.removeAll { $0 == word }
+        try value.save(directoryURL: directoryURL)
+        vocabulary = value.terms
+        errorMessage = nil
+    }
+
+    func addReplacement(phrase: String, replacement: String) throws {
+        let phrase = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !phrase.isEmpty, !phrase.contains(where: \.isNewline) else {
+            throw CompanionStoreError.invalid("Enter a phrase on a single line.")
+        }
+        var rules = try Replacements.load(directoryURL: directoryURL)
+        guard !rules.contains(where: { $0.phrase.lowercased() == phrase.lowercased() }) else {
+            throw CompanionStoreError.invalid("That phrase already has a replacement. Remove it before adding a new one.")
+        }
+        rules.append(TextReplacement(phrase: phrase, replacement: replacement))
+        try saveReplacements(rules)
+    }
+
+    func removeReplacement(_ rule: TextReplacement) throws {
+        var rules = try Replacements.load(directoryURL: directoryURL)
+        guard let index = rules.firstIndex(of: rule) else {
+            throw CompanionStoreError.conflict("This replacement changed outside this window. Refresh and try again.")
+        }
+        rules.remove(at: index)
+        try saveReplacements(rules)
+    }
+
+    private func saveReplacements(_ rules: [TextReplacement]) throws {
+        var value = try Vocabulary.load(directoryURL: directoryURL)
+        value.replacements = rules
+        try value.save(directoryURL: directoryURL)
+        replacements = rules
         errorMessage = nil
     }
 
@@ -216,10 +240,6 @@ final class CompanionStore {
         case .codex: Prompts.codexURL(for: config.codexModel, directoryURL: directoryURL)
         case .local: try Prompts.localLocation(directoryURL: directoryURL).url
         }
-    }
-
-    private func vocabularyText() throws -> String {
-        try String(contentsOf: directoryURL.appendingPathComponent("vocab.txt"), encoding: .utf8)
     }
 
     private static func jsonObject(_ data: Data) throws -> [String: Any] {

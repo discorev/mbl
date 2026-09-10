@@ -80,6 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let config = loadConfig()
+        prepareVocabulary()
         localCleaner.logAvailability()
         let cleaner = CodexCleaner(config: config)
         self.cleaner = cleaner
@@ -122,6 +123,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ) -> Bool {
         openCompanionWindow()
         return true
+    }
+
+    private func prepareVocabulary() {
+        do {
+            try Vocabulary.prepare()
+            AppLog.write("vocabulary loaded")
+        } catch {
+            AppLog.write(
+                "Unable to prepare vocabulary; continuing without it: "
+                    + error.localizedDescription
+            )
+        }
     }
 
     private func loadConfig() -> Config {

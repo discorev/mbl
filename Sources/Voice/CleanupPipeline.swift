@@ -22,6 +22,19 @@ enum CleanupPipeline {
         codex: CodexCleaner,
         local: LocalCleaner
     ) async -> CleanupResult {
+        let rules: [TextReplacement]
+        do { rules = try Replacements.load() }
+        catch {
+            await AppLog.write("Could not read replacements: \(error.localizedDescription)")
+            rules = []
+        }
+        let result = await clean(raw: raw, config: config, codex: codex, local: local)
+        return Replacements.apply(rules, to: result)
+    }
+
+    private static func clean(
+        raw: String, config: Config, codex: CodexCleaner, local: LocalCleaner
+    ) async -> CleanupResult {
         let wordCount = raw.split(whereSeparator: \.isWhitespace).count
         guard wordCount >= config.minWordsForCleanup else {
             return rawResult(raw)

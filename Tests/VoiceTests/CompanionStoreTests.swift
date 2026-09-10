@@ -54,16 +54,17 @@ struct CompanionStoreTests {
         }
     }
 
-    @Test func vocabularyEditsPreserveCommentsAndDeduplicate() throws {
+    @Test func vocabularyMigrationIgnoresCommentsAndDeduplicates() throws {
         try withStore { store, directory in
             let url = directory.appendingPathComponent("vocab.txt")
             try Data("# Names\nOllie\nOllie\n\n# Products\nmbl\n".utf8).write(to: url)
+            try Vocabulary.prepare(directoryURL: directory)
             store.refresh()
             #expect(store.vocabulary == ["Ollie", "mbl"])
             try store.addWord("Codex")
             try store.removeWord("Ollie")
-            let text = try String(contentsOf: url, encoding: .utf8)
-            #expect(text == "# Names\n\n# Products\nmbl\nCodex\n")
+            #expect(!FileManager.default.fileExists(atPath: url.path))
+            #expect(try Vocabulary.load(directoryURL: directory).terms == ["mbl", "Codex"])
             #expect(throws: CompanionStoreError.self) { try store.addWord("one\ntwo") }
         }
     }
@@ -180,7 +181,7 @@ struct CompanionStoreTests {
 
     @Test func suppressedReadErrorAppearsAfterOpenAlertIsDismissed() throws {
         try withStore { store, directory in
-            let url = directory.appendingPathComponent("vocab.txt")
+            let url = directory.appendingPathComponent("vocab.json")
             store.errorMessage = "Settings save failed"
             try Data([0xff]).write(to: url)
             store.refresh()
@@ -191,7 +192,7 @@ struct CompanionStoreTests {
             store.errorMessage = nil
             store.refresh()
             #expect(store.errorMessage == nil)
-            try Data("Recovered".utf8).write(to: url)
+            try Data(#"{"terms":["Recovered"],"replacements":[]}"#.utf8).write(to: url)
             store.refresh()
             #expect(store.vocabulary == ["Recovered"])
         }
@@ -200,7 +201,9 @@ struct CompanionStoreTests {
     @Test func pollingDetectsInPlaceVocabularyAndPromptChanges() throws {
         try withStore { store, directory in
             let prompt = try #require(store.promptSnapshot(for: .codex))
-            for url in [directory.appendingPathComponent("vocab.txt"), prompt.url] {
+            try Data(#"{"terms":["Appended"],"replacements":[]}"#.utf8)
+                .write(to: directory.appendingPathComponent("vocab.json"))
+            for url in [prompt.url] {
                 let handle = try FileHandle(forWritingTo: url)
                 try handle.seekToEnd()
                 try handle.write(contentsOf: Data("Appended".utf8))
@@ -233,6 +236,7 @@ struct CompanionStoreTests {
         try withStore { store, directory in
             try Data("  # Names\r\n Ollie \r\nOllie\n\n\tCodex\t\n".utf8)
                 .write(to: directory.appendingPathComponent("vocab.txt"))
+            try Vocabulary.prepare(directoryURL: directory)
             store.refresh()
             let prompt = try #require(store.promptSnapshot(for: .codex))
             let instructions = try Prompts.instructions(at: prompt.url, directoryURL: directory)

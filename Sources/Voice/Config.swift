@@ -64,7 +64,6 @@ struct Config: Codable, Equatable, Sendable {
         )
 
         let configURL = directory.appendingPathComponent("config.json")
-        let vocabularyURL = directory.appendingPathComponent("vocab.txt")
 
         try writeIfMissing(defaultConfigJSON, to: configURL, fileManager: fileManager)
         let data = try Data(contentsOf: configURL)
@@ -74,7 +73,6 @@ struct Config: Codable, Equatable, Sendable {
             directoryURL: directory,
             fileManager: fileManager
         )
-        try writeIfMissing("", to: vocabularyURL, fileManager: fileManager)
         return config
     }
 

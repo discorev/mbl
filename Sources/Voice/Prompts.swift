@@ -48,13 +48,7 @@ enum Prompts {
         fileManager: FileManager = .default
     ) throws -> Instructions {
         let prompt = try String(contentsOf: promptURL, encoding: .utf8)
-        let vocabularyURL = vocabularyURL(in: directoryURL)
-        let terms: [String]
-        if fileManager.fileExists(atPath: vocabularyURL.path) {
-            terms = vocabularyTerms(in: try String(contentsOf: vocabularyURL, encoding: .utf8))
-        } else {
-            terms = []
-        }
+        let terms = try Vocabulary.load(directoryURL: directoryURL).terms
 
         let vocabulary = terms.isEmpty
             ? ""
@@ -178,7 +172,7 @@ enum Prompts {
     }
 
     private static func vocabularyURL(in directoryURL: URL) -> URL {
-        directoryURL.appendingPathComponent("vocab.txt")
+        directoryURL.appendingPathComponent("vocab.json")
     }
 
     private static func modificationDate(
