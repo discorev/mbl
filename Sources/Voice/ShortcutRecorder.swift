@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 struct ShortcutRecorder: View {
-    private enum State: Equatable {
+    private enum Phase: Equatable {
         case idle
         case recording
         case invalid(String)
@@ -13,7 +13,7 @@ struct ShortcutRecorder: View {
     @Bindable var store: CompanionStore
     var onRecordingChanged: (Bool) -> Void
 
-    @State private var state = State.idle
+    @State private var state = Phase.idle
     @State private var monitor: Any?
     @State private var ownsKeyboard = false
     @State private var heldModifierKeyCodes: Set<Int64> = []
