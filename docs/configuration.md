@@ -8,7 +8,7 @@ Created on first launch.
 
 | Key | Default | Purpose |
 | --- | --- | --- |
-| `hotkey` | `rightOption` | Push-to-talk key: `rightOption` or `rightControl`. |
+| `hotkey` | `{"modifiers":["rightOption"]}` | Push-to-talk shortcut with one or more modifiers and an optional `keyCode`. |
 | `backend` | `codex` | Primary cleanup backend: `codex` or `local`. |
 | `codexModel` | `gpt-5.6-luna` | Model used by Codex. |
 | `codexThreadMaxTurns` | `50` | Cleanup turns before rotating the warm thread. |
@@ -19,6 +19,8 @@ Created on first launch.
 | `hudBottomInset` | `80` | Default HUD distance from the bottom of the display. |
 | `minInputVolume` | `0.5` | Input level below which the HUD warns you. |
 | `autoDownloadUpdates` | `false` | Download updates as soon as they are found; installing still needs a click. |
+
+`hotkey.modifiers` accepts `command`, `option`, `control`, `shift`, and `fn`, plus `leftCommand`, `rightCommand`, `leftOption`, `rightOption`, `leftControl`, `rightControl`, `leftShift`, and `rightShift`. Add a layout-independent macOS virtual `keyCode` for a modifier-plus-key shortcut, for example `{"modifiers":["control","option"],"keyCode":49}` for Control-Option-Space. Sided modifiers stay side-specific on their own; modifier-plus-key shortcuts accept either side. A shortcut must include at least one modifier and use no more than three keys total. Keyboards that handle Fn in firmware never send it to macOS, so Fn cannot be recorded on those keyboards.
 
 ## prompts/
 

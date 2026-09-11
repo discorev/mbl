@@ -20,12 +20,12 @@ struct CompanionStoreTests {
             object["hudBottomInset"] = 120
             try JSONSerialization.data(withJSONObject: object).write(to: url)
             var draft = original
-            draft.hotkey = .rightControl
+            draft.hotkey = Shortcut(modifiers: [.rightControl], keyCode: nil)
             try store.saveConfig(draft, original: original)
             let saved = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
             #expect(saved["futureFeature"] as? [String: Bool] == ["enabled": true])
             #expect(store.config.hudBottomInset == 120)
-            #expect(store.config.hotkey == .rightControl)
+            #expect(store.config.hotkey == Shortcut(modifiers: [.rightControl], keyCode: nil))
         }
     }
 

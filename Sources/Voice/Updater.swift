@@ -13,6 +13,8 @@ final class Updater {
         case failed
     }
 
+    private static let updaterDelegate = UpdaterDelegate()
+
     private let driver: MenuUserDriver
     private let updater: SPUUpdater
 
@@ -36,7 +38,7 @@ final class Updater {
             hostBundle: .main,
             applicationBundle: .main,
             userDriver: driver,
-            delegate: nil
+            delegate: updaterDelegate
         )
         let updater = Updater(driver: driver, updater: sparkleUpdater)
 
@@ -74,6 +76,18 @@ final class Updater {
 
     func installAndRestart() {
         driver.installAndRestart()
+    }
+}
+
+/// Tags are semantic versions, so betas must be ordered below the release
+/// they lead up to. Sparkle's default comparator would treat them as equal.
+nonisolated private final class UpdaterDelegate: NSObject, SPUUpdaterDelegate, SUVersionComparison {
+    func versionComparator(for updater: SPUUpdater) -> (any SUVersionComparison)? {
+        self
+    }
+
+    func compareVersion(_ versionA: String, toVersion versionB: String) -> ComparisonResult {
+        SemanticVersion.compare(versionA, versionB)
     }
 }
 

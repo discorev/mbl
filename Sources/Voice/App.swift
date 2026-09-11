@@ -249,7 +249,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureHotkey(config: Config) {
         let hotkey = Hotkey(
-            key: config.hotkey,
+            shortcut: config.hotkey,
+            matcher: ShortcutMatcher(shortcut: config.hotkey),
             onHold: { [weak self] in self?.dictation?.hold() },
             onRelease: { [weak self] in self?.dictation?.release() },
             onCancel: { [weak self] in self?.dictation?.cancel() },
@@ -674,6 +675,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             companionWindow = CompanionWindowController(
                 store: store,
                 onResetHUD: { [weak self] in self?.resetHUDPosition() },
+                onShortcutRecordingChanged: { [weak self] recording in
+                    guard let self else { return }
+                    if recording {
+                        hotkey?.pause()
+                    } else {
+                        // Swap in the saved shortcut now rather than waiting
+                        // for the file watcher, so the old one is never live.
+                        reloadConfig()
+                        hotkey?.resume()
+                    }
+                },
                 onUpdateAction: { [weak self] in self?.performCompanionUpdateAction() }
             )
         }

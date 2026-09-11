@@ -33,7 +33,12 @@ final class CompanionWindowController: NSObject, NSWindowDelegate {
         set { state.updaterAvailable = newValue }
     }
 
-    init(store: CompanionStore, onResetHUD: @escaping () -> Void, onUpdateAction: @escaping () -> Void) {
+    init(
+        store: CompanionStore,
+        onResetHUD: @escaping () -> Void,
+        onShortcutRecordingChanged: @escaping (Bool) -> Void,
+        onUpdateAction: @escaping () -> Void
+    ) {
         self.store = store
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 566),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -47,7 +52,8 @@ final class CompanionWindowController: NSObject, NSWindowDelegate {
         window.setFrameAutosaveName("mblCompanionWindow")
         window.delegate = self
         window.contentView = NSHostingView(rootView: CompanionView(store: store, state: state,
-            onResetHUD: onResetHUD, onUpdateAction: onUpdateAction))
+            onResetHUD: onResetHUD, onShortcutRecordingChanged: onShortcutRecordingChanged,
+            onUpdateAction: onUpdateAction))
         if !window.setFrameUsingName("mblCompanionWindow") { window.center() }
     }
 
@@ -105,6 +111,7 @@ private struct CompanionView: View {
     @Bindable var store: CompanionStore
     var state: CompanionWindowState
     var onResetHUD: () -> Void
+    var onShortcutRecordingChanged: (Bool) -> Void
     var onUpdateAction: () -> Void
     @State private var page: CompanionPage = .history
 
@@ -125,7 +132,8 @@ private struct CompanionView: View {
                     case .vocabulary: CompanionVocabularyView(store: store)
                     case .replacements: CompanionReplacementsView(store: store)
                     case .cleanup: CompanionCleanupView(store: store, state: state)
-                    case .settings: CompanionSettingsView(store: store, updaterAvailable: state.updaterAvailable, onResetHUD: onResetHUD)
+                    case .settings: CompanionSettingsView(store: store, updaterAvailable: state.updaterAvailable,
+                        onResetHUD: onResetHUD, onShortcutRecordingChanged: onShortcutRecordingChanged)
                     }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 LinearGradient(colors: [.orange, .pink, .purple, .indigo, .cyan], startPoint: .leading, endPoint: .trailing)
@@ -499,6 +507,7 @@ private struct CompanionSettingsView: View {
     @Bindable var store: CompanionStore
     var updaterAvailable: Bool
     var onResetHUD: () -> Void
+    var onShortcutRecordingChanged: (Bool) -> Void
     @State private var microphone = AVCaptureDevice.authorizationStatus(for: .audio)
     @State private var accessibility = AXIsProcessTrusted()
     @State private var inputMonitoring = CGPreflightListenEventAccess()
@@ -508,12 +517,10 @@ private struct CompanionSettingsView: View {
                 pageHeading("Make yourself comfortable.", subtitle: "A few small choices for everyday dictation.")
                 sectionLabel("Dictation")
                 VStack(spacing: 0) {
-                    settingRow("Push-to-talk key", subtitle: "Hold to talk. Release to type.") {
-                        Picker("Push-to-talk key", selection: Binding(get: { store.config.hotkey }, set: { value in store.updateConfig { $0.hotkey = value } })) {
-                            Text("⌥ Right Option").tag(HotkeyKey.rightOption)
-                            Text("⌃ Right Control").tag(HotkeyKey.rightControl)
-                        }.labelsHidden().frame(width: 160)
-                    }
+                    ShortcutRecorder(
+                        store: store,
+                        onRecordingChanged: onShortcutRecordingChanged
+                    )
                     Divider()
                     settingRow("Dictation indicator", subtitle: "Drag it anywhere on your screen.") { Button("Reset position", action: onResetHUD) }
                 }.background(.background, in: RoundedRectangle(cornerRadius: 9))
@@ -570,7 +577,7 @@ private func sectionLabel(_ title: String) -> some View {
     Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
 }
 
-private func settingRow<Content: View>(_ title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
+func settingRow<Content: View>(_ title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
     HStack(spacing: 20) {
         VStack(alignment: .leading, spacing: 3) {
             Text(title).font(.system(size: 13))
