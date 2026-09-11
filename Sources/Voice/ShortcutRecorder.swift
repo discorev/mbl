@@ -45,6 +45,13 @@ struct ShortcutRecorder: View {
             savedTask?.cancel()
             cancelRecording()
         }
+        // Closing the window only hides it, and switching apps leaves it in
+        // place, so the local monitor would otherwise keep capturing keys.
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
+            if isRecording {
+                cancelRecording()
+            }
+        }
     }
 
     private var isRecording: Bool {
