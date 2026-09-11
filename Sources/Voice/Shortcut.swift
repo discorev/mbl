@@ -15,6 +15,12 @@ struct Shortcut: Codable, Equatable, Sendable {
         if modifiers.count + (keyCode == nil ? 0 : 1) > 3 {
             return "Use up to three keys"
         }
+        if let keyCode, Modifier.modifier(forKeyCode: keyCode) != nil {
+            return "Modifiers only need listing once"
+        }
+        if let keyCode, !(0...127).contains(keyCode) {
+            return "Unknown key"
+        }
         return nil
     }
 

@@ -676,8 +676,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 store: store,
                 onResetHUD: { [weak self] in self?.resetHUDPosition() },
                 onShortcutRecordingChanged: { [weak self] recording in
-                    if recording { self?.hotkey?.pause() }
-                    else { self?.hotkey?.resume() }
+                    guard let self else { return }
+                    if recording {
+                        hotkey?.pause()
+                    } else {
+                        // Swap in the saved shortcut now rather than waiting
+                        // for the file watcher, so the old one is never live.
+                        reloadConfig()
+                        hotkey?.resume()
+                    }
                 },
                 onUpdateAction: { [weak self] in self?.performCompanionUpdateAction() }
             )

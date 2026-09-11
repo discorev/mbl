@@ -190,11 +190,17 @@ struct ShortcutRecorder: View {
     }
 
     private func save(_ shortcut: Shortcut) {
-        stopMonitoring()
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
         heldModifierKeyCodes.removeAll()
         capturedModifierKeyCodes.removeAll()
         didPressKey = false
+        // Write first, then hand the keyboard back, so the old shortcut never
+        // gets a window of being live again before the watcher swaps it.
         store.updateConfig { $0.hotkey = shortcut }
+        releaseKeyboard()
         guard store.config.hotkey == shortcut else {
             state = .idle
             return
@@ -227,6 +233,10 @@ struct ShortcutRecorder: View {
             NSEvent.removeMonitor(monitor)
             self.monitor = nil
         }
+        releaseKeyboard()
+    }
+
+    private func releaseKeyboard() {
         if ownsKeyboard {
             ownsKeyboard = false
             onRecordingChanged(false)

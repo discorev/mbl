@@ -15,6 +15,11 @@ struct ShortcutTests {
         )
     }
 
+    @Test func validationRejectsModifierAndUnknownTriggerKeys() {
+        #expect(Shortcut(modifiers: [.option], keyCode: 61).validationMessage == "Modifiers only need listing once")
+        #expect(Shortcut(modifiers: [.option], keyCode: 999).validationMessage == "Unknown key")
+    }
+
     @Test func validationAcceptsSupportedShortcutShapes() {
         #expect(Shortcut(modifiers: [.fn], keyCode: nil).validationMessage == nil)
         #expect(Shortcut.defaultValue.validationMessage == nil)
