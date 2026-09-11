@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Derive version
         shell: bash
@@ -29,7 +29,7 @@ jobs:
         run: echo "version=$(xcodebuild -version | tr '\n' ' ' | tr -s ' ' '-' | sed 's/-$//')" >> "$GITHUB_OUTPUT"
 
       - name: Restore build cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             .build
@@ -160,7 +160,7 @@ jobs:
           xmllint --noout build/appcast.xml
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             build/mbl-${{ env.VERSION }}.dmg
